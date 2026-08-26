@@ -1,0 +1,186 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
+import { DashboardLayout } from '../../components/Layout'
+import { Button, PlatformIcon, StatusBadge, Tabs } from '../../components/ui'
+import { usePostsStore } from '../../store'
+import axios from 'axios'
+
+const PLATFORM_COLORS = { facebook: '#1877f2', instagram: '#e1306c', linkedin: '#0077b5' }
+
+export default function PostsList() {
+  const navigate = useNavigate()
+  const { posts, fetchPosts, fetched: postsFetched } = usePostsStore()
+
+  useEffect(() => {
+    if (!postsFetched) fetchPosts()
+  }, [postsFetched, fetchPosts])
+  const [activeTab, setActiveTab] = useState('all')
+  const [search, setSearch] = useState('')
+  const [platformFilter, setPlatformFilter] = useState('all')
+
+  const tabs = [
+    { value: 'all', label: 'All Posts', count: posts.length },
+    { value: 'published', label: 'Published', count: posts.filter(p => p.status === 'published').length },
+    { value: 'scheduled', label: 'Scheduled', count: posts.filter(p => p.status === 'scheduled').length },
+    { value: 'draft', label: 'Drafts', count: posts.filter(p => p.status === 'draft').length },
+    { value: 'failed', label: 'Failed', count: posts.filter(p => p.status === 'failed').length },
+  ]
+
+  const filtered = posts.filter(p => {
+    const matchTab = activeTab === 'all' || p.status === activeTab
+    const matchSearch = p.content.toLowerCase().includes(search.toLowerCase()) || p.account_name.toLowerCase().includes(search.toLowerCase())
+    const matchPlatform = platformFilter === 'all' || p.platform === platformFilter
+    return matchTab && matchSearch && matchPlatform
+  })
+
+  const handleDelete = async (postId) => {
+    try {
+      await axios.delete(`/api/posts/${postId}`)
+      fetchPosts()
+      toast.success('Post deleted.')
+    } catch(err) {
+      toast.error('Failed to delete post.')
+    }
+  }
+
+  const handleRetry = async (post) => {
+    toast.loading('Retrying post...', { id: 'retry' })
+    try {
+      await axios.post(`/api/posts/${post.id}/retry`)
+      fetchPosts()
+      toast.success('Post published!', { id: 'retry' })
+    } catch(err) {
+      toast.error('Failed to retry post.', { id: 'retry' })
+    }
+  }
+
+  return (
+    <DashboardLayout
+      title="Posts"
+      actions={
+        <Button variant="primary" size="sm" onClick={() => navigate('/posts/create')}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Create Post
+        </Button>
+      }
+    >
+      {/* Filters */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+        <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="search-box" style={{ width: 220 }}>
+            <span className="search-box-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            </span>
+            <input placeholder="Search posts..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <select className="form-select" style={{ width: 140 }} value={platformFilter} onChange={e => setPlatformFilter(e.target.value)}>
+            <option value="all">All platforms</option>
+            <option value="facebook">Facebook</option>
+            <option value="instagram">Instagram</option>
+            <option value="linkedin">LinkedIn</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Posts list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {filtered.length === 0 ? (
+          <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
+            <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No posts found</h3>
+            <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)', marginBottom: 24 }}>
+              {search || platformFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first post to get started'}
+            </p>
+            <Button variant="primary" onClick={() => navigate('/posts/create')}>Create Post</Button>
+          </div>
+        ) : (
+          filtered.map((post, i) => (
+            <div
+              key={post.id}
+              className="card animate-slide-up"
+              style={{ padding: 0, animationDelay: `${i * 50}ms` }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, padding: '18px 24px' }}>
+                {/* Platform icon */}
+                <div style={{
+                  width: 40, height: 40, borderRadius: 'var(--radius-lg)',
+                  background: `${PLATFORM_COLORS[post.platform]}18`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <PlatformIcon platform={post.platform} size={20} />
+                </div>
+
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{post.account_name}</span>
+                    <StatusBadge status={post.status} />
+                    <span style={{ padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)', fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
+                      {post.platform}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {post.content}
+                  </p>
+
+                  {/* Meta info */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+                    {post.published_at && (
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        Published: {post.published_at}
+                      </span>
+                    )}
+                    {post.scheduled_at && (
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-info-600)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                        Scheduled: {post.scheduled_at}
+                      </span>
+                    )}
+                    {post.status === 'published' && (
+                      <div style={{ display: 'flex', gap: 14 }}>
+                        {[['❤️', post.likes], ['💬', post.comments], ['🔁', post.shares]].map(([e, v], j) => (
+                          <span key={j} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 600 }}>{e} {v}</span>
+                        ))}
+                      </div>
+                    )}
+                    {post.status === 'failed' && post.error && (
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        ⚠️ {post.error}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  {post.status === 'failed' && (
+                    <Button variant="secondary" size="sm" onClick={() => handleRetry(post)}>Retry</Button>
+                  )}
+                  {(post.status === 'draft' || post.status === 'scheduled') && (
+                    <Button variant="secondary" size="sm" onClick={() => navigate('/posts/create')}>Edit</Button>
+                  )}
+                  {post.status === 'scheduled' && (
+                    <Button variant="ghost" size="sm" onClick={() => { setPosts(p => p.map(x => x.id === post.id ? { ...x, status: 'cancelled' } : x)); toast.success('Post cancelled.') }}>Cancel</Button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(post.id)}
+                    style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', transition: 'all var(--transition-fast)' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-error-50)'; e.currentTarget.style.color = 'var(--color-error-500)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </DashboardLayout>
+  )
+}

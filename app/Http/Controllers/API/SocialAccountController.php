@@ -1,0 +1,346 @@
+<?php
+
+namespace App\Http\Controllers\API;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use App\Models\SocialAccount;
+use App\Models\AuditLog;
+
+class SocialAccountController extends Controller
+{
+    // ─── Facebook OAuth ─────────────────────────────────────────────────────
+
+    public function oauthMetaUrl(Request $request)
+    {
+        $type = $request->query('type', 'page');
+        $state = Crypt::encryptString(json_encode(['user_id' => $request->user()->id, 'type' => $type]));
+
+        $scope = 'pages_manage_posts,pages_read_engagement,ads_management,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_messages';
+        if ($type === 'group') {
+            $scope = 'publish_to_groups';
+        }
+
+        $params = http_build_query([
+            'client_id'     => env('META_APP_ID'),
+            'redirect_uri'  => env('META_REDIRECT_URI'),
+            'state'         => $state,
+            'scope'         => $scope,
+            'response_type' => 'code',
+        ]);
+
+        return response()->json(['url' => "https://www.facebook.com/v19.0/dialog/oauth?{$params}"]);
+    }
+
+    public function oauthMetaCallback(Request $request)
+    {
+        if ($request->has('error') || !$request->has('state')) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
+        }
+
+        try {
+            $stateData = json_decode(Crypt::decryptString($request->state), true);
+            $user = \App\Models\User::findOrFail($stateData['user_id']);
+            $type = $stateData['type'] ?? 'page';
+        } catch (\Exception $e) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=invalid_state');
+        }
+
+        // Exchange code for access token
+        $response = Http::withoutVerifying()->get('https://graph.facebook.com/v19.0/oauth/access_token', [
+            'client_id'     => env('META_APP_ID'),
+            'client_secret' => env('META_APP_SECRET'),
+            'redirect_uri'  => env('META_REDIRECT_URI'),
+            'code'          => $request->code,
+        ]);
+
+        if (!$response->ok()) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
+        }
+
+        $tokenData  = $response->json();
+        $userToken  = $tokenData['access_token'];
+
+        // Get long-lived token
+        $llResponse = Http::withoutVerifying()->get('https://graph.facebook.com/v19.0/oauth/access_token', [
+            'grant_type'        => 'fb_exchange_token',
+            'client_id'         => env('META_APP_ID'),
+            'client_secret'     => env('META_APP_SECRET'),
+            'fb_exchange_token' => $userToken,
+        ]);
+
+        $longLivedToken = $llResponse->ok() ? $llResponse->json()['access_token'] : $userToken;
+
+        // Get user pages or groups
+        $endpoint = $type === 'group' ? 'me/groups' : 'me/accounts?fields=id,name,access_token,instagram_business_account{id,username,followers_count}';
+
+        $pagesResponse = Http::withoutVerifying()->withToken($longLivedToken)
+            ->get("https://graph.facebook.com/v19.0/{$endpoint}");
+
+        if (!$pagesResponse->ok()) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=pages_fetch_failed');
+        }
+
+        $pages = $pagesResponse->json()['data'] ?? [];
+
+        \Log::info("Facebook {$type}s fetched for user " . $user->id, ['accounts' => $pages, 'raw_response' => $pagesResponse->json()]);
+
+        foreach ($pages as $page) {
+            SocialAccount::updateOrCreate(
+                ['platform' => 'facebook', 'platform_account_id' => $page['id'], 'user_id' => $user->id],
+                [
+                    'account_name'  => $page['name'],
+                    'platform_type' => $type,
+                    'access_token'  => Crypt::encryptString($type === 'group' ? $longLivedToken : $page['access_token']),
+                    'status'        => 'active',
+                    'connected_at'  => now(),
+                ]
+            );
+
+            // Connect Instagram Business Account if it exists on the page
+            if (isset($page['instagram_business_account'])) {
+                $ig = $page['instagram_business_account'];
+                SocialAccount::updateOrCreate(
+                    ['platform' => 'instagram', 'platform_account_id' => $ig['id'], 'user_id' => $user->id],
+                    [
+                        'account_name'  => '@' . ($ig['username'] ?? 'unknown'),
+                        'platform_type' => 'business',
+                        'access_token'  => Crypt::encryptString($page['access_token']), // IG uses FB page token
+                        'followers'     => $ig['followers_count'] ?? 0,
+                        'status'        => 'active',
+                        'connected_at'  => now(),
+                    ]
+                );
+            }
+        }
+
+        AuditLog::create([
+            'user_id'     => $user->id,
+            'action'      => 'account.connect',
+            'module'      => 'Accounts',
+            'description' => 'Facebook pages connected.',
+            'ip_address'  => $request->ip(),
+        ]);
+
+        return redirect(env('FRONTEND_URL') . '/accounts?success=facebook_connected');
+    }
+
+    // ─── Instagram OAuth ─────────────────────────────────────────────────────
+
+    public function oauthInstagram(Request $request)
+    {
+        $state  = Str::random(40);
+        session(['oauth_state' => $state]);
+
+        $params = http_build_query([
+            'client_id'     => env('INSTAGRAM_APP_ID', env('META_APP_ID')),
+            'redirect_uri'  => env('INSTAGRAM_REDIRECT_URI', url('/api/oauth/instagram/callback')),
+            'state'         => $state,
+            'scope'         => 'instagram_basic,instagram_content_publish,instagram_manage_insights',
+            'response_type' => 'code',
+        ]);
+
+        return redirect("https://www.instagram.com/oauth/authorize?{$params}");
+    }
+
+    public function oauthInstagramCallback(Request $request)
+    {
+        if ($request->has('error') || $request->state !== session('oauth_state')) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
+        }
+
+        // Exchange code for short-lived token
+        $response = Http::asForm()->post('https://graph.instagram.com/v19.0/oauth/access_token', [
+            'client_id'     => env('INSTAGRAM_APP_ID', env('META_APP_ID')),
+            'client_secret' => env('INSTAGRAM_APP_SECRET', env('META_APP_SECRET')),
+            'grant_type'    => 'authorization_code',
+            'redirect_uri'  => env('INSTAGRAM_REDIRECT_URI', url('/api/oauth/instagram/callback')),
+            'code'          => $request->code,
+        ]);
+
+        if (!$response->ok()) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
+        }
+
+        $tokenData = $response->json();
+        $shortToken = $tokenData['access_token'];
+        $igUserId   = $tokenData['user_id'];
+
+        // Get long-lived token (60 days)
+        $llResponse = Http::get('https://graph.instagram.com/access_token', [
+            'grant_type'        => 'ig_exchange_token',
+            'client_secret'     => env('INSTAGRAM_APP_SECRET', env('META_APP_SECRET')),
+            'access_token'      => $shortToken,
+        ]);
+
+        $longToken = $llResponse->ok() ? $llResponse->json()['access_token'] : $shortToken;
+
+        // Get account info
+        $profileResponse = Http::get("https://graph.instagram.com/{$igUserId}", [
+            'fields'       => 'id,username,account_type,media_count,followers_count',
+            'access_token' => $longToken,
+        ]);
+
+        $profile = $profileResponse->ok() ? $profileResponse->json() : ['id' => $igUserId, 'username' => 'unknown'];
+        $user    = $request->user();
+
+        SocialAccount::updateOrCreate(
+            ['platform' => 'instagram', 'platform_account_id' => $profile['id'], 'user_id' => $user->id],
+            [
+                'account_name'  => '@' . ($profile['username'] ?? 'unknown'),
+                'platform_type' => 'business',
+                'access_token'  => Crypt::encryptString($longToken),
+                'followers'     => $profile['followers_count'] ?? 0,
+                'status'        => 'active',
+                'connected_at'  => now(),
+                'expires_at'    => now()->addDays(60),
+            ]
+        );
+
+        return redirect(env('FRONTEND_URL') . '/accounts?success=instagram_connected');
+    }
+
+    // ─── LinkedIn OAuth ───────────────────────────────────────────────────────
+
+    public function oauthLinkedIn(Request $request)
+    {
+        $state  = Str::random(40);
+        session(['oauth_state' => $state]);
+
+        $params = http_build_query([
+            'response_type' => 'code',
+            'client_id'     => env('LINKEDIN_CLIENT_ID'),
+            'redirect_uri'  => env('LINKEDIN_REDIRECT_URI'),
+            'state'         => $state,
+            'scope'         => 'r_liteprofile r_emailaddress w_member_social r_ads w_ads rw_organization_admin r_organization_social w_organization_social',
+        ]);
+
+        return redirect("https://www.linkedin.com/oauth/v2/authorization?{$params}");
+    }
+
+    public function oauthLinkedInCallback(Request $request)
+    {
+        if ($request->has('error') || $request->state !== session('oauth_state')) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
+        }
+
+        $response = Http::asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
+            'grant_type'    => 'authorization_code',
+            'code'          => $request->code,
+            'redirect_uri'  => env('LINKEDIN_REDIRECT_URI'),
+            'client_id'     => env('LINKEDIN_CLIENT_ID'),
+            'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
+        ]);
+
+        if (!$response->ok()) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
+        }
+
+        $tokenData   = $response->json();
+        $accessToken = $tokenData['access_token'];
+        $expiresIn   = $tokenData['expires_in'] ?? 5183944; // ~60 days
+
+        // Get member profile
+        $profileResp = Http::withToken($accessToken)
+            ->get('https://api.linkedin.com/v2/me', [
+                'projection' => '(id,firstName,lastName,vanityName)',
+            ]);
+
+        $profile = $profileResp->ok() ? $profileResp->json() : null;
+        $name    = $profile ? ($profile['localizedFirstName'] . ' ' . $profile['localizedLastName']) : 'LinkedIn User';
+        $user    = $request->user();
+
+        SocialAccount::updateOrCreate(
+            ['platform' => 'linkedin', 'platform_account_id' => $profile['id'] ?? Str::random(10), 'user_id' => $user->id],
+            [
+                'account_name'  => $name,
+                'platform_type' => 'personal',
+                'access_token'  => Crypt::encryptString($accessToken),
+                'status'        => 'active',
+                'connected_at'  => now(),
+                'expires_at'    => now()->addSeconds($expiresIn),
+            ]
+        );
+
+        return redirect(env('FRONTEND_URL') . '/accounts?success=linkedin_connected');
+    }
+
+    // ─── CRUD ────────────────────────────────────────────────────────────────
+
+    public function index(Request $request)
+    {
+        $accounts = SocialAccount::where('user_id', $request->user()->id)
+            ->latest()
+            ->get()
+            ->map(fn ($a) => $this->formatAccount($a));
+
+        return response()->json(['success' => true, 'accounts' => $accounts]);
+    }
+
+    public function show(Request $request, int $id)
+    {
+        $account = SocialAccount::where('user_id', $request->user()->id)->findOrFail($id);
+
+        return response()->json(['success' => true, 'account' => $this->formatAccount($account)]);
+    }
+
+    public function disconnect(Request $request, int $id)
+    {
+        $account = SocialAccount::where('user_id', $request->user()->id)->findOrFail($id);
+        $account->delete();
+
+        AuditLog::create([
+            'user_id'     => $request->user()->id,
+            'action'      => 'account.disconnect',
+            'module'      => 'Accounts',
+            'description' => "Disconnected {$account->platform} account: {$account->account_name}",
+            'ip_address'  => $request->ip(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Account disconnected.']);
+    }
+
+    public function reconnect(Request $request, int $id)
+    {
+        $account = SocialAccount::where('user_id', $request->user()->id)->findOrFail($id);
+
+        // Redirect to the appropriate OAuth flow
+        $platform = $account->platform;
+        $oauthUrl = $platform === 'facebook' ? url('/api/auth/meta') : route("api.oauth.{$platform}");
+
+        return response()->json(['success' => true, 'redirect_url' => $oauthUrl]);
+    }
+
+    public function checkStatus(Request $request, int $id)
+    {
+        $account = SocialAccount::where('user_id', $request->user()->id)->findOrFail($id);
+
+        $isExpired = $account->expires_at && now()->isAfter($account->expires_at);
+        if ($isExpired) {
+            $account->update(['status' => 'expired']);
+        }
+
+        return response()->json([
+            'success' => true,
+            'status'  => $account->fresh()->status,
+            'expired' => $isExpired,
+        ]);
+    }
+
+    private function formatAccount(SocialAccount $account): array
+    {
+        return [
+            'id'           => $account->id,
+            'platform'     => $account->platform,
+            'account_name' => $account->account_name,
+            'platform_type'=> $account->platform_type,
+            'status'       => $account->status,
+            'followers'    => $account->followers,
+            'connected_at' => $account->connected_at?->format('Y-m-d'),
+            'expires_at'   => $account->expires_at?->format('Y-m-d H:i'),
+        ];
+    }
+}
