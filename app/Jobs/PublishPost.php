@@ -54,7 +54,7 @@ class PublishPost implements ShouldQueue
             ]);
 
             // Notify user
-            $post->user->notify(new PostPublished($post));
+            // $post->user->notify(new PostPublished($post));
 
             AuditLog::create([
                 'user_id'     => $post->user_id,
@@ -71,32 +71,57 @@ class PublishPost implements ShouldQueue
         }
     }
 
-    // ─── Facebook Graph API ───────────────────────────────────────────────────
-
     private function publishToFacebook(Post $post, SocialAccount $account, string $token): array
     {
         $pageId   = $account->platform_account_id;
+        \Log::info("Starting Facebook publish for post #{$post->id} to Page ID: {$pageId}");
+
         $payload  = ['message' => $this->buildContent($post), 'access_token' => $token];
 
         if ($post->media_path && in_array($post->post_type, ['image', 'carousel'])) {
-            $mediaUrl = \Storage::url($post->media_path);
             $endpoint = "https://graph.facebook.com/v19.0/{$pageId}/photos";
-            $payload['url'] = $mediaUrl;
+            $localPath = public_path(ltrim($post->media_path, '/'));
+            \Log::info("Facebook: Uploading image to {$endpoint}");
+
+            if (file_exists($localPath)) {
+                $response = Http::withoutVerifying()
+                    ->attach('source', file_get_contents($localPath), 'image.jpg')
+                    ->post($endpoint, $payload);
+            } else {
+                \Log::info("Facebook: Local file not found at {$localPath}, using fallback public URL");
+                $payload['url'] = 'https://images.unsplash.com/photo-1500622944204-b135684e99fd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80.jpg';
+                $response = Http::withoutVerifying()->post($endpoint, $payload);
+            }
         } elseif ($post->media_path && $post->post_type === 'video') {
             $endpoint = "https://graph.facebook.com/v19.0/{$pageId}/videos";
-            $payload['file_url'] = \Storage::url($post->media_path);
+            $localPath = public_path(ltrim($post->media_path, '/'));
+            \Log::info("Facebook: Uploading video to {$endpoint}");
+            
+            if (file_exists($localPath)) {
+                $response = Http::withoutVerifying()
+                    ->attach('source', file_get_contents($localPath), 'video.mp4')
+                    ->post($endpoint, $payload);
+            } else {
+                \Log::info("Facebook: Local file not found at {$localPath}, using fallback public URL");
+                $payload['file_url'] = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                $response = Http::withoutVerifying()->post($endpoint, $payload);
+            }
         } else {
             $endpoint = "https://graph.facebook.com/v19.0/{$pageId}/feed";
+            \Log::info("Facebook: Publishing text post to {$endpoint}");
+            $response = Http::withoutVerifying()->post($endpoint, $payload);
         }
 
-        $response = Http::post($endpoint, $payload);
-
-        if (!$response->ok() || isset($response->json()['error'])) {
-            $err = $response->json()['error']['message'] ?? 'Facebook API error';
-            throw new \Exception($err);
+        if (!$response->successful() || isset($response->json()['error'])) {
+            $err = $response->json()['error']['message'] ?? $response->body();
+            \Log::error("Facebook API error: {$err}");
+            throw new \Exception("Facebook API error: {$err}");
         }
 
-        return ['platform_post_id' => $response->json()['id']];
+        $platformPostId = $response->json()['id'];
+        \Log::info("Facebook publish successful. Platform Post ID: {$platformPostId}");
+
+        return ['platform_post_id' => $platformPostId];
     }
 
     // ─── Instagram Graph API ──────────────────────────────────────────────────
@@ -104,54 +129,204 @@ class PublishPost implements ShouldQueue
     private function publishToInstagram(Post $post, SocialAccount $account, string $token): array
     {
         $igUserId = $account->platform_account_id;
+        \Log::info("Starting Instagram publish for post #{$post->id} to IG User ID: {$igUserId}");
 
-        // Step 1: Create media container
-        $containerPayload = ['caption' => $this->buildContent($post), 'access_token' => $token];
+        // Step 1: Resolve image URL
+        // Instagram API requires a publicly accessible URL. On localhost, 127.0.0.1 is not reachable
+        // by Instagram's servers, so we upload the image to Facebook (same Meta credentials) as an
+        // unpublished photo and use the resulting Facebook CDN URL.
+        $containerPayload = [
+            'caption'      => $this->buildContent($post),
+            'access_token' => $token,
+        ];
 
-        if ($post->media_path && $post->post_type === 'image') {
-            $containerPayload['image_url'] = \Storage::url($post->media_path);
-            $containerPayload['media_type'] = 'IMAGE';
-        } elseif ($post->media_path && $post->post_type === 'video') {
-            $containerPayload['video_url'] = \Storage::url($post->media_path);
-            $containerPayload['media_type'] = 'REELS';
+        if ($post->media_path && in_array($post->post_type, ['image', 'video'])) {
+            $localPath = public_path(ltrim($post->media_path, '/'));
+            $url = url($post->media_path);
+
+            if ((str_contains($url, 'localhost') || str_contains($url, '127.0.0.1')) && file_exists($localPath)) {
+                \Log::info("Instagram: Localhost detected. Uploading image via Facebook Graph API to get a public CDN URL...");
+
+                // Convert to JPEG using GD (Instagram only accepts JPEG)
+                $imageData = file_get_contents($localPath);
+                $gdImage = @imagecreatefromstring($imageData);
+                if ($gdImage !== false) {
+                    ob_start();
+                    imagejpeg($gdImage, null, 95);
+                    $jpegData = ob_get_clean();
+                    imagedestroy($gdImage);
+                } else {
+                    $jpegData = $imageData; // fallback: use raw data
+                }
+
+                // Find the connected Facebook Page account for this user to upload via its API
+                $fbAccount = \App\Models\SocialAccount::where('user_id', $post->user_id)
+                    ->where('platform', 'facebook')
+                    ->where('status', 'active')
+                    ->first();
+
+                if ($fbAccount) {
+                    $fbToken  = Crypt::decryptString($fbAccount->access_token);
+                    $fbPageId = $fbAccount->platform_account_id;
+
+                    \Log::info("Instagram: Uploading to Facebook Page {$fbPageId} as unpublished photo to get CDN URL...");
+
+                    // Upload as UNPUBLISHED photo — this does NOT create a Facebook post
+                    $fbResp = Http::withoutVerifying()
+                        ->attach('source', $jpegData, 'photo.jpg')
+                        ->post("https://graph.facebook.com/v19.0/{$fbPageId}/photos", [
+                            'published'    => 'false',
+                            'access_token' => $fbToken,
+                        ]);
+
+                    \Log::info("Instagram: Facebook photo upload status: " . $fbResp->status());
+                    \Log::info("Instagram: Facebook photo upload body: " . $fbResp->body());
+
+                    if ($fbResp->successful() && !isset($fbResp->json()['error'])) {
+                        $photoId = $fbResp->json()['id'] ?? null;
+                        if ($photoId) {
+                            // Fetch the full picture URL from the uploaded photo
+                            $picResp = Http::withoutVerifying()
+                                ->get("https://graph.facebook.com/v19.0/{$photoId}", [
+                                    'fields'       => 'images',
+                                    'access_token' => $fbToken,
+                                ]);
+                            \Log::info("Instagram: Photo detail response: " . $picResp->body());
+                            $images = $picResp->json()['images'] ?? [];
+                            // Use the largest image (first in array)
+                            $cdnUrl = $images[0]['source'] ?? null;
+                            if ($cdnUrl) {
+                                $url = $cdnUrl;
+                                \Log::info("Instagram: Got Facebook CDN URL: {$url}");
+                            }
+                        }
+                    } else {
+                        \Log::error("Instagram: Facebook photo upload failed: " . $fbResp->body());
+                    }
+                } else {
+                    \Log::warning("Instagram: No active Facebook account found for user #{$post->user_id}. Cannot get public CDN URL.");
+                }
+            }
+
+            if ($post->post_type === 'image') {
+                $containerPayload['image_url'] = $url;
+                $containerPayload['media_type'] = 'IMAGE';
+                \Log::info("Instagram Image URL: {$url}");
+            } else {
+                $containerPayload['video_url'] = $url;
+                $containerPayload['media_type'] = 'REELS';
+                \Log::info("Instagram Video URL: {$url}");
+            }
         } else {
+            \Log::error("Instagram publish failed: No media provided for post #{$post->id}");
             throw new \Exception('Instagram requires at least one image or video.');
         }
 
-        $containerResp = Http::post("https://graph.instagram.com/v19.0/{$igUserId}/media", $containerPayload);
+        // Step 2: Create IG media container
+        \Log::info("Sending Instagram container payload:", $containerPayload);
+        $containerResp = Http::withoutVerifying()
+            ->post("https://graph.facebook.com/v19.0/{$igUserId}/media", $containerPayload);
 
-        if (!$containerResp->ok()) {
-            throw new \Exception('Failed to create Instagram media container.');
+        if (!$containerResp->successful()) {
+            $errorDetail = $containerResp->json()['error']['message'] ?? $containerResp->body();
+            \Log::error("Instagram container creation failed: {$errorDetail}");
+            throw new \Exception("Failed to create Instagram media container: {$errorDetail}");
         }
 
         $containerId = $containerResp->json()['id'];
+        \Log::info("Instagram media container created with ID: {$containerId}");
 
-        // Step 2: Publish container
-        $publishResp = Http::post("https://graph.instagram.com/v19.0/{$igUserId}/media_publish", [
-            'creation_id'  => $containerId,
-            'access_token' => $token,
-        ]);
+        // Step 3: Publish the container
+        \Log::info("Publishing Instagram container ID: {$containerId}");
+        $publishResp = Http::withoutVerifying()
+            ->post("https://graph.facebook.com/v19.0/{$igUserId}/media_publish", [
+                'creation_id'  => $containerId,
+                'access_token' => $token,
+            ]);
 
-        if (!$publishResp->ok()) {
-            throw new \Exception('Failed to publish Instagram media.');
+        if (!$publishResp->successful()) {
+            $errorDetail = $publishResp->json()['error']['message'] ?? $publishResp->body();
+            \Log::error("Instagram media publish failed: {$errorDetail}");
+            throw new \Exception("Failed to publish Instagram media: {$errorDetail}");
         }
 
-        return ['platform_post_id' => $publishResp->json()['id']];
+        $platformPostId = $publishResp->json()['id'];
+        \Log::info("Instagram publish successful. Platform Post ID: {$platformPostId}");
+
+        return ['platform_post_id' => $platformPostId];
     }
 
-    // ─── LinkedIn API ─────────────────────────────────────────────────────────
+
 
     private function publishToLinkedIn(Post $post, SocialAccount $account, string $token): array
     {
         $authorUrn = "urn:li:person:{$account->platform_account_id}";
+        \Log::info("Starting LinkedIn publish for post #{$post->id} to Author URN: {$authorUrn}");
+
+        $content = $this->buildContent($post);
+        $shareMediaCategory = 'NONE';
+        $mediaUrn = null;
+
+        if ($post->media_path && in_array($post->post_type, ['image', 'video'])) {
+            $localPath = public_path(ltrim($post->media_path, '/'));
+            $isImage = $post->post_type === 'image';
+            $recipe = $isImage ? 'urn:li:digitalmediaRecipe:feedshare-image' : 'urn:li:digitalmediaRecipe:feedshare-video';
+            $shareMediaCategory = $isImage ? 'IMAGE' : 'VIDEO';
+            \Log::info("LinkedIn: Processing media type {$shareMediaCategory}, Recipe: {$recipe}");
+
+            if (file_exists($localPath)) {
+                // Step 1: Register Upload
+                \Log::info("LinkedIn: Registering media upload");
+                $registerResp = Http::withoutVerifying()->withToken($token)->post('https://api.linkedin.com/v2/assets?action=registerUpload', [
+                    'registerUploadRequest' => [
+                        'recipes' => [$recipe],
+                        'owner' => $authorUrn,
+                        'serviceRelationships' => [
+                            ['relationshipType' => 'OWNER', 'identifier' => 'urn:li:userGeneratedContent']
+                        ]
+                    ]
+                ]);
+
+                if ($registerResp->successful()) {
+                    $registerData = $registerResp->json();
+                    $uploadUrl = $registerData['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl'] ?? null;
+                    $mediaUrn = $registerData['value']['asset'] ?? null;
+
+                    if ($uploadUrl) {
+                        \Log::info("LinkedIn: Uploading binary data to URL: {$uploadUrl}");
+                        // Step 2: Upload Binary Data
+                        $uploadResp = Http::withoutVerifying()
+                            ->withHeaders(['Authorization' => 'Bearer ' . $token])
+                            ->withBody(file_get_contents($localPath), mime_content_type($localPath))
+                            ->put($uploadUrl);
+
+                        if (!$uploadResp->successful()) {
+                            \Log::error('LinkedIn Media Upload Failed: ' . $uploadResp->body());
+                            $shareMediaCategory = 'NONE';
+                            $mediaUrn = null;
+                        } else {
+                            \Log::info("LinkedIn: Media uploaded successfully. Asset URN: {$mediaUrn}");
+                        }
+                    } else {
+                        \Log::error('LinkedIn Media Upload URL not found in response: ' . $registerResp->body());
+                        $shareMediaCategory = 'NONE';
+                        $mediaUrn = null;
+                    }
+                } else {
+                    \Log::error("LinkedIn Register Upload failed: " . $registerResp->body());
+                }
+            } else {
+                \Log::warning("LinkedIn: Local file not found at {$localPath}");
+            }
+        }
 
         $body = [
             'author'         => $authorUrn,
             'lifecycleState' => 'PUBLISHED',
             'specificContent' => [
                 'com.linkedin.ugc.ShareContent' => [
-                    'shareCommentary' => ['text' => $this->buildContent($post)],
-                    'shareMediaCategory' => 'NONE',
+                    'shareCommentary' => ['text' => $content],
+                    'shareMediaCategory' => $shareMediaCategory,
                 ],
             ],
             'visibility' => [
@@ -159,22 +334,30 @@ class PublishPost implements ShouldQueue
             ],
         ];
 
-        if ($post->media_path && in_array($post->post_type, ['image', 'video'])) {
-            $body['specificContent']['com.linkedin.ugc.ShareContent']['shareMediaCategory'] =
-                $post->post_type === 'video' ? 'VIDEO' : 'IMAGE';
-            // Note: LinkedIn requires multi-step upload for media; simplified here
+        if ($mediaUrn) {
+            $body['specificContent']['com.linkedin.ugc.ShareContent']['media'] = [
+                [
+                    'status' => 'READY',
+                    'media' => $mediaUrn
+                ]
+            ];
         }
 
-        $response = Http::withToken($token)
+        \Log::info("Sending LinkedIn UGC Post payload:", $body);
+        $response = Http::withoutVerifying()->withToken($token)
             ->withHeaders(['X-Restli-Protocol-Version' => '2.0.0'])
             ->post('https://api.linkedin.com/v2/ugcPosts', $body);
 
-        if (!$response->ok()) {
-            $err = $response->json()['message'] ?? 'LinkedIn API error';
-            throw new \Exception($err);
+        if (!$response->successful()) {
+            $err = $response->json()['message'] ?? $response->body();
+            \Log::error('LinkedIn Response Error: ' . $err);
+            throw new \Exception("LinkedIn API Error: " . $err);
         }
 
-        return ['platform_post_id' => $response->header('x-linkedin-id')];
+        $platformPostId = $response->header('x-linkedin-id');
+        \Log::info("LinkedIn publish successful. Platform Post ID: {$platformPostId}");
+
+        return ['platform_post_id' => $platformPostId];
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -205,7 +388,7 @@ class PublishPost implements ShouldQueue
             'error_message' => $error,
         ]);
 
-        $post->user->notify(new PostFailed($post, $error));
+        // $post->user->notify(new PostFailed($post, $error));
 
         Log::error("Post #{$post->id} failed: {$error}");
     }

@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Jobs\PublishPost;
-use App\Jobs\SchedulePost;
 use App\Models\AuditLog;
 use Carbon\Carbon;
 
@@ -45,57 +44,93 @@ class PostController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'social_account_id' => 'required|exists:social_accounts,id',
-            'content'           => 'required_without:media_path|nullable|string|max:63206',
-            'hashtags'          => 'nullable|string',
-            'link'              => 'nullable|url',
-            'post_type'         => 'required|in:text,image,video,carousel',
-            'media_path'        => 'nullable|string',
-            'status'            => 'required|in:draft,scheduled,publish_now',
-            'scheduled_at'      => 'required_if:status,scheduled|nullable|date|after:now',
+            'posts'                   => 'required|array|min:1',
+            'posts.*.social_account_id' => 'required|exists:social_accounts,id',
+            'posts.*.content'         => 'nullable|string|max:63206',
+            'posts.*.hashtags'        => 'nullable|string',
+            'posts.*.link'            => 'nullable|url',
+            'posts.*.status'          => 'required|in:draft,scheduled,publish_now',
+            'posts.*.scheduled_at'    => 'required_if:posts.*.status,scheduled|nullable|date',
+            'scheduled_at'            => 'required_if:status,scheduled|nullable|date',
+            'post_type'               => 'required|in:text,image,video,carousel',
+            'media_base64'            => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
 
-        // Check account ownership
-        $account = SocialAccount::where('user_id', $request->user()->id)
-            ->where('id', $request->social_account_id)
+        $accountIds = collect($request->posts)->pluck('social_account_id')->unique()->toArray();
+        
+        // Check account ownership for all requested accounts
+        $accounts = SocialAccount::where('user_id', $request->user()->id)
+            ->whereIn('id', $accountIds)
             ->where('status', 'active')
-            ->first();
+            ->get();
 
-        if (!$account) {
-            return response()->json(['success' => false, 'message' => 'Social account not found or inactive.'], 404);
+        if ($accounts->isEmpty() || $accounts->count() !== count($accountIds)) {
+            return response()->json(['success' => false, 'message' => 'One or more social accounts not found or inactive.'], 404);
         }
 
-        $post = Post::create([
-            'user_id'           => $request->user()->id,
-            'social_account_id' => $request->social_account_id,
-            'content'           => $request->content,
-            'hashtags'          => $request->hashtags,
-            'link'              => $request->link,
-            'post_type'         => $request->post_type ?? 'text',
-            'media_path'        => $request->media_path,
-            'status'            => $request->status === 'publish_now' ? 'queued' : ($request->status ?? 'draft'),
-            'scheduled_at'      => $request->status === 'scheduled' ? Carbon::parse($request->scheduled_at) : null,
-        ]);
-
-        if ($request->status === 'publish_now') {
-            PublishPost::dispatch($post);
-        } elseif ($request->status === 'scheduled') {
-            SchedulePost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
+        $mediaPath = null;
+        if ($request->has('media_base64') && $request->media_base64) {
+            $base64Data = $request->media_base64;
+            // Example format: data:image/png;base64,iVBORw0KGgo...
+            if (strpos($base64Data, ';base64,') !== false) {
+                list($type, $data) = explode(';', $base64Data);
+                list(, $data)      = explode(',', $data);
+                $data = base64_decode($data);
+                
+                $mimeType = explode(':', $type)[1] ?? 'image/jpeg';
+                $extension = explode('/', $mimeType)[1] ?? 'jpg';
+                if ($extension === 'jpeg') $extension = 'jpg';
+                
+                $filename = uniqid('media_', true) . '.' . $extension;
+                $uploadPath = public_path('uploads/posts');
+                if (!\File::exists($uploadPath)) {
+                    \File::makeDirectory($uploadPath, 0755, true);
+                }
+                \File::put($uploadPath . '/' . $filename, $data);
+                $mediaPath = '/uploads/posts/' . $filename;
+            }
         }
 
-        AuditLog::create([
-            'user_id'     => $request->user()->id,
-            'action'      => 'post.create',
-            'module'      => 'Content',
-            'description' => "Post created for {$account->platform}: {$account->account_name}",
-            'ip_address'  => $request->ip(),
-        ]);
+        $createdPosts = [];
 
-        return response()->json(['success' => true, 'post' => $post->load('socialAccount')], 201);
+        foreach ($request->posts as $postData) {
+            $account = $accounts->firstWhere('id', $postData['social_account_id']);
+            
+            $post = Post::create([
+                'user_id'           => $request->user()->id,
+                'social_account_id' => $account->id,
+                'content'           => $postData['content'] ?? null,
+                'hashtags'          => $postData['hashtags'] ?? null,
+                'link'              => $postData['link'] ?? null,
+                'post_type'         => $request->post_type,
+                'media_path'        => $mediaPath,
+                'status'            => $postData['status'] === 'publish_now' ? 'queued' : ($postData['status'] ?? 'draft'),
+                'scheduled_at'      => $postData['status'] === 'scheduled' ? Carbon::parse($postData['scheduled_at']) : null,
+            ]);
+
+            if ($postData['status'] === 'publish_now') {
+                PublishPost::dispatchSync($post);
+                $post->refresh();
+            } elseif ($postData['status'] === 'scheduled') {
+                PublishPost::dispatch($post)->delay(Carbon::parse($postData['scheduled_at']));
+            }
+
+            AuditLog::create([
+                'user_id'     => $request->user()->id,
+                'action'      => 'post.create',
+                'module'      => 'Content',
+                'description' => "Post created for {$account->platform}: {$account->account_name}",
+                'ip_address'  => $request->ip(),
+            ]);
+
+            $createdPosts[] = $post->load('socialAccount');
+        }
+
+        return response()->json(['success' => true, 'posts' => $createdPosts], 201);
     }
 
     /**
@@ -104,7 +139,7 @@ class PostController extends Controller
     public function show(Request $request, int $id)
     {
         $post = Post::where('user_id', $request->user()->id)
-            ->with(['socialAccount', 'analytics'])
+            ->with(['socialAccount'])
             ->findOrFail($id);
 
         return response()->json(['success' => true, 'post' => $post]);
@@ -116,10 +151,71 @@ class PostController extends Controller
     public function update(Request $request, int $id)
     {
         $post = Post::where('user_id', $request->user()->id)
-            ->whereIn('status', ['draft', 'scheduled'])
+            ->whereIn('status', ['draft', 'scheduled', 'failed', 'rejected', 'paused'])
             ->findOrFail($id);
 
-        $post->update($request->only(['content', 'hashtags', 'link', 'media_path', 'scheduled_at']));
+        $validator = Validator::make($request->all(), [
+            'social_account_id' => 'required|exists:social_accounts,id',
+            'content'           => 'required_without:media|nullable|string|max:63206',
+            'hashtags'          => 'nullable|string',
+            'link'              => 'nullable|url',
+            'post_type'         => 'required|in:text,image,video,carousel',
+            'media_base64'      => 'nullable|string',
+            'status'            => 'required|in:draft,scheduled,publish_now',
+            'scheduled_at'      => 'required_if:status,scheduled|nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $account = SocialAccount::where('user_id', $request->user()->id)
+            ->where('id', $request->social_account_id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$account) {
+            return response()->json(['success' => false, 'message' => 'Social account not found or inactive.'], 404);
+        }
+
+        $mediaPath = $post->media_path;
+        if ($request->has('media_base64') && $request->media_base64) {
+            $base64Data = $request->media_base64;
+            if (strpos($base64Data, ';base64,') !== false) {
+                list($type, $data) = explode(';', $base64Data);
+                list(, $data)      = explode(',', $data);
+                $data = base64_decode($data);
+                
+                $mimeType = explode(':', $type)[1] ?? 'image/jpeg';
+                $extension = explode('/', $mimeType)[1] ?? 'jpg';
+                if ($extension === 'jpeg') $extension = 'jpg';
+                
+                $filename = uniqid('media_', true) . '.' . $extension;
+                $uploadPath = public_path('uploads/posts');
+                if (!\File::exists($uploadPath)) {
+                    \File::makeDirectory($uploadPath, 0755, true);
+                }
+                \File::put($uploadPath . '/' . $filename, $data);
+                $mediaPath = '/uploads/posts/' . $filename;
+            }
+        }
+
+        $post->update([
+            'social_account_id' => $request->social_account_id,
+            'content'           => $request->content,
+            'hashtags'          => $request->hashtags,
+            'link'              => $request->link,
+            'post_type'         => $request->post_type,
+            'media_path'        => $mediaPath,
+            'status'            => $request->status === 'publish_now' ? 'queued' : ($request->status ?? 'draft'),
+            'scheduled_at'      => $request->status === 'scheduled' ? Carbon::parse($request->scheduled_at) : null,
+        ]);
+
+        if ($request->status === 'publish_now') {
+            PublishPost::dispatchSync($post);
+        } elseif ($request->status === 'scheduled') {
+            PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
+        }
 
         return response()->json(['success' => true, 'post' => $post->fresh()]);
     }
@@ -129,7 +225,32 @@ class PostController extends Controller
      */
     public function destroy(Request $request, int $id)
     {
-        $post = Post::where('user_id', $request->user()->id)->findOrFail($id);
+        $post = Post::where('user_id', $request->user()->id)->with('socialAccount')->findOrFail($id);
+        
+        // Attempt to delete from social platform if it was published
+        if ($post->status === 'published' && $post->platform_post_id && $post->socialAccount) {
+            $platformPostId = $post->platform_post_id;
+            $account = $post->socialAccount;
+            $token = \Illuminate\Support\Facades\Crypt::decryptString($account->access_token);
+
+            dispatch(function () use ($platformPostId, $account, $token) {
+                try {
+                    if ($account->platform === 'facebook') {
+                        \Illuminate\Support\Facades\Http::withoutVerifying()
+                            ->delete("https://graph.facebook.com/v19.0/{$platformPostId}?access_token={$token}");
+                    } elseif ($account->platform === 'linkedin') {
+                        \Illuminate\Support\Facades\Http::withoutVerifying()
+                            ->withToken($token)
+                            ->withHeaders(['X-Restli-Protocol-Version' => '2.0.0'])
+                            ->delete("https://api.linkedin.com/v2/ugcPosts/{$platformPostId}");
+                    }
+                    // Note: Instagram Graph API does not officially support deleting media via API.
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Failed to delete social post {$platformPostId}: " . $e->getMessage());
+                }
+            })->afterResponse();
+        }
+
         $post->delete();
 
         return response()->json(['success' => true, 'message' => 'Post deleted.']);
@@ -145,7 +266,7 @@ class PostController extends Controller
             ->findOrFail($id);
 
         $post->update(['status' => 'queued', 'scheduled_at' => null]);
-        PublishPost::dispatch($post);
+        PublishPost::dispatchSync($post);
 
         return response()->json(['success' => true, 'message' => 'Post queued for publishing.', 'post' => $post->fresh()]);
     }
@@ -156,7 +277,7 @@ class PostController extends Controller
     public function schedule(Request $request, int $id)
     {
         $validator = Validator::make($request->all(), [
-            'scheduled_at' => 'required|date|after:now',
+            'scheduled_at' => 'required|date',
         ]);
 
         if ($validator->fails()) {
@@ -172,7 +293,7 @@ class PostController extends Controller
             'scheduled_at' => Carbon::parse($request->scheduled_at),
         ]);
 
-        SchedulePost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
+        PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
 
         return response()->json(['success' => true, 'post' => $post->fresh()]);
     }
@@ -201,7 +322,7 @@ class PostController extends Controller
             ->findOrFail($id);
 
         $post->update(['status' => 'queued', 'error_message' => null, 'retry_count' => $post->retry_count + 1]);
-        PublishPost::dispatch($post);
+        PublishPost::dispatchSync($post);
 
         return response()->json(['success' => true, 'message' => 'Retry queued.', 'post' => $post->fresh()]);
     }

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { DashboardLayout } from '../components/Layout'
 import { Button, Avatar, Toggle } from '../components/ui'
-import { useAuthStore, useThemeStore } from '../store'
+import { useAuthStore, useThemeStore, ACCENT_COLORS } from '../store'
 import { toast } from 'react-hot-toast'
 
 export default function Settings() {
   const { user, updateUser } = useAuthStore()
-  const { theme, setTheme } = useThemeStore()
+  const { theme, setTheme, accent, setAccent } = useThemeStore()
   const [activeSection, setActiveSection] = useState('profile')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -40,7 +40,6 @@ export default function Settings() {
     { id: 'security', label: 'Security', icon: '🔒' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
     { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'billing', label: 'Billing & Plan', icon: '💳' },
   ]
 
   return (
@@ -223,104 +222,91 @@ export default function Settings() {
               <div className="card-header">
                 <h3 style={{ fontWeight: 700, fontSize: 'var(--font-size-lg)', color: 'var(--text-primary)' }}>Appearance</h3>
               </div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+                {/* Theme mode */}
                 <div>
-                  <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Theme</label>
+                  <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Theme Mode</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                     {[
-                      { value: 'light', label: 'Light', icon: '☀️', desc: 'Clean white background' },
-                      { value: 'dark', label: 'Dark', icon: '🌙', desc: 'Easy on the eyes at night' },
+                      { value: 'light', label: 'Light', desc: 'Clean white background' },
+                      { value: 'dark', label: 'Dark', desc: 'Easy on the eyes at night' },
                     ].map(t => (
                       <button
                         key={t.value}
                         onClick={() => setTheme(t.value)}
                         style={{
-                          padding: '20px', borderRadius: 'var(--radius-xl)', border: `2px solid ${theme === t.value ? 'var(--color-brand-500)' : 'var(--border-primary)'}`,
-                          background: theme === t.value ? 'var(--bg-active)' : 'var(--bg-secondary)', cursor: 'pointer',
-                          fontFamily: 'inherit', textAlign: 'center', transition: 'all var(--transition-fast)',
+                          padding: '16px 20px', borderRadius: 'var(--radius-xl)',
+                          border: `2px solid ${theme === t.value ? 'var(--color-brand-500)' : 'var(--border-primary)'}`,
+                          background: theme === t.value ? 'var(--bg-active)' : 'var(--bg-secondary)',
+                          cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                          transition: 'all var(--transition-fast)',
+                          display: 'flex', alignItems: 'center', gap: 14,
                         }}
                       >
-                        <div style={{ fontSize: 32, marginBottom: 8 }}>{t.icon}</div>
-                        <div style={{ fontWeight: 700, color: theme === t.value ? 'var(--color-brand-600)' : 'var(--text-primary)', fontSize: 'var(--font-size-md)' }}>{t.label}</div>
-                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{t.desc}</div>
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 'var(--radius-lg)',
+                          background: t.value === 'light' ? '#f8fafc' : '#1e293b',
+                          border: '2px solid var(--border-primary)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          {t.value === 'light' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: theme === t.value ? 'var(--color-brand-600)' : 'var(--text-primary)', fontSize: 'var(--font-size-sm)' }}>{t.label}</div>
+                          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{t.desc}</div>
+                        </div>
+                        {theme === t.value && (
+                          <div style={{ marginLeft: 'auto', width: 18, height: 18, borderRadius: '50%', background: 'var(--color-brand-500)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {activeSection === 'billing' && (
-            <div className="card">
-              <div className="card-header">
-                <h3 style={{ fontWeight: 700, fontSize: 'var(--font-size-lg)', color: 'var(--text-primary)' }}>Billing & Plan</h3>
-              </div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div style={{ background: 'linear-gradient(135deg, var(--color-brand-500), var(--color-brand-700))', borderRadius: 'var(--radius-xl)', padding: '24px', color: 'white' }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, opacity: 0.8 }}>Current Plan</div>
-                  <div style={{ fontSize: 32, fontWeight: 800, marginBottom: 4, letterSpacing: '-0.04em' }}>Pro Plan</div>
-                  <div style={{ opacity: 0.8, fontSize: 'var(--font-size-sm)' }}>$49/month · Renews March 31, 2024</div>
-                  <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-                    <button style={{ background: 'rgba(255,255,255,0.2)', border: '1.5px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '8px 16px', color: 'white', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
-                      Upgrade to Enterprise
-                    </button>
-                    <button style={{ background: 'transparent', border: '1.5px solid rgba(255,255,255,0.3)', borderRadius: 8, padding: '8px 16px', color: 'rgba(255,255,255,0.8)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13 }}>
-                      Manage Billing
-                    </button>
-                  </div>
-                </div>
-
+                {/* Accent color */}
                 <div>
-                  <h4 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, fontSize: 'var(--font-size-md)' }}>Plan Features</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {[
-                      '10 Connected Social Accounts',
-                      'Unlimited Post Scheduling',
-                      'Facebook & Instagram Ads',
-                      'LinkedIn Ads',
-                      'Analytics & Reporting',
-                      'Team Collaboration (up to 5 members)',
-                      'Media Library (50GB)',
-                      'Priority Email Support',
-                    ].map((f, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--color-success-50)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-600)" strokeWidth="3">
-                            <path d="M20 6L9 17l-5-5"/>
-                          </svg>
-                        </div>
-                        <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>{f}</span>
-                      </div>
+                  <label className="form-label" style={{ marginBottom: 4, display: 'block' }}>Accent Color</label>
+                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginBottom: 14 }}>Changes the primary brand color across the entire application.</p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {ACCENT_COLORS.map(color => (
+                      <button
+                        key={color.id}
+                        onClick={() => setAccent(color.id)}
+                        title={color.label}
+                        style={{
+                          width: 42, height: 42, borderRadius: 'var(--radius-lg)',
+                          background: color.primary,
+                          border: `3px solid ${accent === color.id ? color.dark : 'transparent'}`,
+                          outline: accent === color.id ? `2px solid ${color.primary}` : 'none',
+                          outlineOffset: 2,
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                          transform: accent === color.id ? 'scale(1.12)' : 'scale(1)',
+                        }}
+                      >
+                        {accent === color.id && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                        )}
+                      </button>
                     ))}
                   </div>
-                </div>
-
-                <div>
-                  <h4 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12, fontSize: 'var(--font-size-md)' }}>Billing History</h4>
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr><th>Date</th><th>Description</th><th>Amount</th><th>Status</th><th>Invoice</th></tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { date: 'Mar 1, 2024', desc: 'Pro Plan - March', amount: '$49.00', status: 'paid' },
-                          { date: 'Feb 1, 2024', desc: 'Pro Plan - February', amount: '$49.00', status: 'paid' },
-                          { date: 'Jan 1, 2024', desc: 'Pro Plan - January', amount: '$49.00', status: 'paid' },
-                        ].map((inv, i) => (
-                          <tr key={i}>
-                            <td>{inv.date}</td>
-                            <td>{inv.desc}</td>
-                            <td style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{inv.amount}</td>
-                            <td><Badge variant="success">{inv.status}</Badge></td>
-                            <td><button onClick={() => toast.success('Downloading invoice...')} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-brand-600)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Download PDF</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: ACCENT_COLORS.find(c => c.id === accent)?.primary || '#7c5cfc' }} />
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                      {ACCENT_COLORS.find(c => c.id === accent)?.label || 'Violet'} selected
+                    </span>
                   </div>
                 </div>
+
+                <Button variant="primary" onClick={() => toast.success('Appearance settings saved!')} style={{ width: 'fit-content' }}>Save Preferences</Button>
               </div>
             </div>
           )}

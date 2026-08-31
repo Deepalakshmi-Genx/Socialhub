@@ -9,21 +9,45 @@ export const useAuthStore = create(
       user: null,
       token: null,
       isAuthenticated: false,
-      setUser: (user, token) => set({ user, token, isAuthenticated: true }),
+      login: (user, token) => {
+        set({ user, token, isAuthenticated: true })
+      },
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false })
       },
-      updateUser: (data) => set((state) => ({ user: { ...state.user, ...data } })),
+      updateUser: (data) => {
+        set((state) => ({ user: { ...state.user, ...data } }))
+      },
     }),
     { name: 'socialhub-auth' }
   )
 )
+
+// ─── Accent Colors ────────────────────────────────────────────────────────────
+export const ACCENT_COLORS = [
+  { id: 'violet',  label: 'Violet',  primary: '#7c5cfc', dark: '#5b3fd4' },
+  { id: 'blue',    label: 'Blue',    primary: '#3b82f6', dark: '#1d4ed8' },
+  { id: 'emerald', label: 'Emerald', primary: '#10b981', dark: '#047857' },
+  { id: 'rose',    label: 'Rose',    primary: '#f43f5e', dark: '#be123c' },
+  { id: 'amber',   label: 'Amber',   primary: '#f59e0b', dark: '#b45309' },
+  { id: 'cyan',    label: 'Cyan',    primary: '#06b6d4', dark: '#0e7490' },
+]
+
+function applyAccent(colorId) {
+  const color = ACCENT_COLORS.find(c => c.id === colorId) || ACCENT_COLORS[0]
+  const r = document.documentElement
+  r.style.setProperty('--color-brand-500', color.primary)
+  r.style.setProperty('--color-brand-600', color.primary)
+  r.style.setProperty('--color-brand-700', color.dark)
+  r.style.setProperty('--color-brand-800', color.dark)
+}
 
 // ─── Theme Store ──────────────────────────────────────────────────────────────
 export const useThemeStore = create(
   persist(
     (set) => ({
       theme: 'light',
+      accent: 'violet',
       toggleTheme: () =>
         set((state) => {
           const newTheme = state.theme === 'light' ? 'dark' : 'light'
@@ -35,6 +59,10 @@ export const useThemeStore = create(
         document.documentElement.setAttribute('data-theme', theme)
         localStorage.setItem('socialhub-theme', theme)
         set({ theme })
+      },
+      setAccent: (colorId) => {
+        applyAccent(colorId)
+        set({ accent: colorId })
       },
     }),
     { name: 'socialhub-theme-store' }
@@ -53,141 +81,83 @@ export const useUIStore = create((set) => ({
 }))
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
-export const MOCK_USER = {
-  id: 1,
-  name: 'Alex Johnson',
-  email: 'alex@socialhub.io',
-  role: 'admin',
-  company: 'TechBrand Inc.',
-  avatar: null,
-  plan: 'Pro',
+export const MOCK_NOTIFICATIONS = []
+
+export const MOCK_CAMPAIGNS = []
+
+export const MOCK_ANALYTICS = {
+  chart_data: [
+    { date: 'Mon', impressions: 1200, reach: 900 },
+    { date: 'Tue', impressions: 2100, reach: 1600 },
+    { date: 'Wed', impressions: 1800, reach: 1400 },
+    { date: 'Thu', impressions: 2400, reach: 1900 },
+    { date: 'Fri', impressions: 2800, reach: 2100 },
+    { date: 'Sat', impressions: 3200, reach: 2400 },
+    { date: 'Sun', impressions: 3600, reach: 2800 }
+  ],
+  organic: {
+    total_posts: 125,
+    total_impressions: 45200,
+    total_reach: 38400,
+    total_engagement: 5200,
+    engagement_rate: 4.8,
+    total_clicks: 1200,
+    followers_growth: 3.2,
+    total_likes: 3400,
+    total_comments: 850,
+    total_shares: 420
+  },
+  advertising: {
+    total_spend: 1250.50,
+    total_impressions: 125000,
+    total_reach: 85000,
+    total_clicks: 4500,
+    avg_ctr: 3.6,
+    conversions: 125,
+    cpa: 10.00,
+    roas: 2.4
+  },
 }
 
-// ─── API Data Stores ──────────────────────────────────────────────────────────
+export const MOCK_USER = {
+  id: 1,
+  name: 'Deepa Administrator',
+  email: 'admin@socialhub.com',
+  role: 'admin',
+  company: 'Acme Corp',
+}
+
+export const MOCK_USERS_ADMIN = [
+  { id: 1, name: 'Deepa', email: 'admin@socialhub.com', role: 'admin', status: 'active', last_login: '2 mins ago' },
+]
+
+// ─── Data Stores ──────────────────────────────────────────────────────────────
 export const useSocialAccountsStore = create((set) => ({
   accounts: [],
-  loading: false,
   fetched: false,
   fetchAccounts: async () => {
-    set({ loading: true })
     try {
       const res = await axios.get('/api/social/accounts')
-      if (res.data.success) {
-        set({ accounts: res.data.accounts, fetched: true })
-      }
-    } catch (err) {
-      console.error('Failed to fetch accounts:', err)
-    } finally {
-      set({ loading: false })
+      const accounts = res.data.accounts || (Array.isArray(res.data) ? res.data : (res.data.data?.data || res.data.data || []))
+      set({ accounts, fetched: true })
+    } catch (e) {
+      console.error('Failed to fetch accounts', e)
+      set({ accounts: [], fetched: true })
     }
   }
 }))
 
 export const usePostsStore = create((set) => ({
   posts: [],
-  loading: false,
   fetched: false,
   fetchPosts: async () => {
-    set({ loading: true })
     try {
-      const res = await axios.get('/api/posts?per_page=100') // fetch enough for calendar/dashboard
-      if (res.data.success) {
-        const items = res.data.data?.data || res.data.data || []
-        set({ posts: items, fetched: true })
-      }
-    } catch (err) {
-      console.error('Failed to fetch posts:', err)
-    } finally {
-      set({ loading: false })
+      const res = await axios.get('/api/posts')
+      const posts = Array.isArray(res.data) ? res.data : (res.data.data?.data || res.data.data || [])
+      set({ posts, fetched: true })
+    } catch (e) {
+      console.error('Failed to fetch posts', e)
+      set({ posts: [], fetched: true })
     }
   }
 }))
-
-export const MOCK_CAMPAIGNS = [
-  {
-    id: 1, name: 'Spring Launch 2024', platform: 'facebook', objective: 'Brand Awareness',
-    status: 'active', budget: 500, spend: 342.50, impressions: 45200, clicks: 1240, ctr: 2.74,
-    start_date: '2024-03-01', end_date: '2024-03-31',
-  },
-  {
-    id: 2, name: 'Instagram Engagement Boost', platform: 'instagram', objective: 'Engagement',
-    status: 'paused', budget: 200, spend: 87.20, impressions: 18900, clicks: 643, ctr: 3.40,
-    start_date: '2024-03-10', end_date: '2024-03-25',
-  },
-  {
-    id: 3, name: 'LinkedIn Lead Gen Q1', platform: 'linkedin', objective: 'Lead Generation',
-    status: 'active', budget: 800, spend: 412.00, impressions: 9800, clicks: 284, ctr: 2.90,
-    start_date: '2024-02-15', end_date: '2024-03-31',
-  },
-  {
-    id: 4, name: 'Product Demo Retargeting', platform: 'facebook', objective: 'Conversions',
-    status: 'completed', budget: 300, spend: 298.40, impressions: 32100, clicks: 890, ctr: 2.77,
-    start_date: '2024-02-01', end_date: '2024-02-28',
-  },
-]
-
-export const MOCK_NOTIFICATIONS = [
-  {
-    id: 1, type: 'success', title: 'Post Published!',
-    message: 'Your post on TechBrand Page was published successfully.',
-    is_read: false, created_at: '2 min ago',
-  },
-  {
-    id: 2, type: 'error', title: 'Post Failed',
-    message: 'Could not publish to @techbrand_official. Token expired.',
-    is_read: false, created_at: '15 min ago',
-  },
-  {
-    id: 3, type: 'warning', title: 'Connection Expiring',
-    message: 'Your LinkedIn connection will expire in 3 days. Please reconnect.',
-    is_read: false, created_at: '1 hour ago',
-  },
-  {
-    id: 4, type: 'info', title: 'Campaign Approved',
-    message: 'Spring Launch 2024 campaign has been approved and is now running.',
-    is_read: true, created_at: '3 hours ago',
-  },
-  {
-    id: 5, type: 'success', title: 'Post Scheduled',
-    message: 'Your Instagram post has been scheduled for March 23 at 4:00 PM.',
-    is_read: true, created_at: '5 hours ago',
-  },
-]
-
-export const MOCK_ANALYTICS = {
-  organic: {
-    total_posts: 48,
-    total_likes: 3240,
-    total_comments: 412,
-    total_shares: 287,
-    total_reach: 84200,
-    total_impressions: 127400,
-    engagement_rate: 4.2,
-    followers_growth: 14.5,
-  },
-  advertising: {
-    total_campaigns: 4,
-    total_impressions: 106000,
-    total_clicks: 3057,
-    avg_ctr: 2.88,
-    total_spend: 1140.10,
-    avg_cpc: 0.37,
-    conversions: 142,
-    cost_per_conversion: 8.03,
-  },
-  chart_data: Array.from({ length: 14 }, (_, i) => ({
-    date: new Date(Date.now() - (13 - i) * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    impressions: Math.floor(3000 + Math.random() * 4000),
-    clicks: Math.floor(80 + Math.random() * 200),
-    engagement: Math.floor(40 + Math.random() * 120),
-    reach: Math.floor(2000 + Math.random() * 3000),
-  })),
-}
-
-export const MOCK_USERS_ADMIN = [
-  { id: 1, name: 'Alex Johnson', email: 'alex@techbrand.io', role: 'admin', status: 'active', created_at: '2024-01-10', accounts: 3 },
-  { id: 2, name: 'Sarah Chen', email: 'sarah@socialhub.io', role: 'manager', status: 'active', created_at: '2024-01-15', accounts: 2 },
-  { id: 3, name: 'Mike Torres', email: 'mike@medialab.com', role: 'user', status: 'active', created_at: '2024-02-01', accounts: 1 },
-  { id: 4, name: 'Emma Wilson', email: 'emma@brandco.io', role: 'user', status: 'inactive', created_at: '2024-02-10', accounts: 2 },
-  { id: 5, name: 'James Park', email: 'james@techbrand.io', role: 'user', status: 'active', created_at: '2024-02-20', accounts: 3 },
-]

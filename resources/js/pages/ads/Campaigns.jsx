@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
+import axios from 'axios'
 import { DashboardLayout } from '../../components/Layout'
 import { Button, PlatformIcon, StatusBadge, Tabs } from '../../components/ui'
-import { MOCK_CAMPAIGNS } from '../../store'
 
 const PLATFORM_COLORS = { facebook: '#1877f2', instagram: '#e1306c', linkedin: '#0077b5' }
 
 function CampaignCard({ campaign, onPause, onResume, onDuplicate }) {
-  const pct = Math.min(100, (campaign.spend / campaign.budget) * 100)
+  const budget = parseFloat(campaign.budget) || 0
+  const spend = parseFloat(campaign.spend) || 0
+  const pct = budget > 0 ? Math.min(100, (spend / budget) * 100) : 0
 
   return (
     <div className="card animate-slide-up" style={{ padding: 0 }}>
@@ -21,7 +23,7 @@ function CampaignCard({ campaign, onPause, onResume, onDuplicate }) {
             <div>
               <div style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', color: 'var(--text-primary)' }}>{campaign.name}</div>
               <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>
-                {campaign.objective} · {campaign.start_date} – {campaign.end_date}
+                {campaign.objective} · {campaign.start_date} – {campaign.end_date || 'Ongoing'}
               </div>
             </div>
           </div>
@@ -31,11 +33,11 @@ function CampaignCard({ campaign, onPause, onResume, onDuplicate }) {
         {/* Metrics */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
           {[
-            { label: 'Budget', value: `$${campaign.budget}` },
-            { label: 'Spent', value: `$${campaign.spend.toFixed(0)}` },
-            { label: 'Impressions', value: campaign.impressions.toLocaleString() },
-            { label: 'Clicks', value: campaign.clicks.toLocaleString() },
-            { label: 'CTR', value: `${campaign.ctr}%` },
+            { label: 'Budget', value: `$${budget}` },
+            { label: 'Spent', value: `$${spend.toFixed(0)}` },
+            { label: 'Impressions', value: (campaign.impressions || 0).toLocaleString() },
+            { label: 'Clicks', value: (campaign.clicks || 0).toLocaleString() },
+            { label: 'CTR', value: `${(campaign.ctr || 0)}%` },
           ].map((m, i) => (
             <div key={i} style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', padding: '10px 12px' }}>
               <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{m.label}</div>
@@ -49,7 +51,7 @@ function CampaignCard({ campaign, onPause, onResume, onDuplicate }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 600 }}>Budget used</span>
             <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: pct > 90 ? 'var(--color-error-500)' : 'var(--text-primary)' }}>
-              ${campaign.spend.toFixed(0)} / ${campaign.budget} ({pct.toFixed(0)}%)
+              ${spend.toFixed(0)} / ${budget} ({pct.toFixed(0)}%)
             </span>
           </div>
           <div className="progress-bar">
@@ -82,9 +84,26 @@ function CampaignCard({ campaign, onPause, onResume, onDuplicate }) {
 
 export default function Campaigns() {
   const navigate = useNavigate()
-  const [campaigns, setCampaigns] = useState(MOCK_CAMPAIGNS)
+  const [campaigns, setCampaigns] = useState([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
   const [platformFilter, setPlatformFilter] = useState('all')
+
+  const fetchCampaigns = async () => {
+    try {
+      const res = await axios.get('/api/campaigns')
+      setCampaigns(res.data.data.data) // Laravel pagination returns data.data
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to load campaigns')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchCampaigns()
+  }, [])
 
   const tabs = [
     { value: 'all', label: 'All', count: campaigns.length },
@@ -98,9 +117,9 @@ export default function Campaigns() {
     (platformFilter === 'all' || c.platform === platformFilter)
   )
 
-  const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0)
-  const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0)
-  const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0)
+  const totalSpend = campaigns.reduce((s, c) => s + (parseFloat(c.spend) || 0), 0)
+  const totalImpressions = campaigns.reduce((s, c) => s + (parseInt(c.impressions, 10) || 0), 0)
+  const totalClicks = campaigns.reduce((s, c) => s + (parseInt(c.clicks, 10) || 0), 0)
 
   const handlePause = (c) => {
     setCampaigns(cs => cs.map(x => x.id === c.id ? { ...x, status: 'paused' } : x))
@@ -157,7 +176,11 @@ export default function Campaigns() {
 
       {/* Campaign list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+            Loading campaigns...
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="card" style={{ padding: '48px 32px', textAlign: 'center' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📢</div>
             <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No campaigns found</h3>

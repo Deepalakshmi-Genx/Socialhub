@@ -56,6 +56,7 @@ export default function App() {
 
       <Route path="/posts" element={<ProtectedRoute><PostsList /></ProtectedRoute>} />
       <Route path="/posts/create" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+      <Route path="/posts/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
 
       <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><MediaLibrary /></ProtectedRoute>} />

@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
+import axios from 'axios'
+import { useSocialAccountsStore } from '../../store'
 import { DashboardLayout } from '../../components/Layout'
 import { Button, PlatformIcon, StepWizard } from '../../components/ui'
 
@@ -18,13 +20,25 @@ const OBJECTIVES = [
 const INTERESTS = ['Technology', 'Business', 'Marketing', 'Fashion', 'Travel', 'Food', 'Fitness', 'Gaming', 'Finance', 'Education', 'Parenting', 'Sports', 'Photography', 'Art', 'Music']
 const COUNTRIES = ['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Germany', 'France', 'Brazil', 'Singapore', 'UAE']
 
+const StepPanel = ({ title, subtitle, children }) => (
+  <div className="card animate-slide-up" style={{ maxWidth: 680, margin: '0 auto' }}>
+    <div className="card-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>{title}</h2>
+      <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>{subtitle}</p>
+    </div>
+    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {children}
+    </div>
+  </div>
+)
+
 export default function CreateCampaign() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
   const [campaign, setCampaign] = useState({
-    platform: '',
+    platforms: [],
     name: '',
     objective: '',
     // Audience
@@ -49,11 +63,12 @@ export default function CreateCampaign() {
   })
 
   const update = (key, val) => setCampaign(c => ({ ...c, [key]: val }))
+  const togglePlatform = (p) => setCampaign(c => ({ ...c, platforms: c.platforms.includes(p) ? c.platforms.filter(x => x !== p) : [...c.platforms, p] }))
   const addInterest = (i) => setCampaign(c => ({ ...c, interests: c.interests.includes(i) ? c.interests.filter(x => x !== i) : [...c.interests, i] }))
   const addLocation = (l) => setCampaign(c => ({ ...c, locations: c.locations.includes(l) ? c.locations.filter(x => x !== l) : [...c.locations, l] }))
 
   const canProceed = () => {
-    if (step === 0) return !!campaign.platform
+    if (step === 0) return campaign.platforms.length > 0
     if (step === 1) return !!campaign.name && !!campaign.objective
     if (step === 2) return campaign.locations.length > 0
     if (step === 3) return !!campaign.budget && !!campaign.startDate
@@ -61,24 +76,45 @@ export default function CreateCampaign() {
     return true
   }
 
+  const { accounts, fetchAccounts, fetched: accountsFetched } = useSocialAccountsStore()
+  
+  useEffect(() => {
+    if (!accountsFetched) fetchAccounts()
+  }, [accountsFetched, fetchAccounts])
+
   const handleSubmit = async () => {
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 2500))
-    toast.success('Campaign submitted for review! 🚀')
-    navigate('/campaigns')
-  }
+    try {
+      const payload = {
+        name: campaign.name,
+        platforms: campaign.platforms,
+        objective: campaign.objective,
+        budget: campaign.budget,
+        budget_type: campaign.budgetType,
+        start_date: campaign.startDate,
+        end_date: campaign.endDate || null,
+        locations: campaign.locations,
+        age_min: campaign.ageMin,
+        age_max: campaign.ageMax,
+        gender: campaign.gender,
+        interests: campaign.interests,
+        primary_text: campaign.primaryText,
+        headline: campaign.headline,
+        description: campaign.description,
+        cta: campaign.cta,
+        destination_url: campaign.destinationUrl,
+      }
 
-  const StepPanel = ({ title, subtitle, children }) => (
-    <div className="card animate-slide-up" style={{ maxWidth: 680, margin: '0 auto' }}>
-      <div className="card-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-        <h2 style={{ fontSize: 'var(--font-size-xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>{title}</h2>
-        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>{subtitle}</p>
-      </div>
-      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {children}
-      </div>
-    </div>
-  )
+      await axios.post('/api/campaigns', payload, { headers: { 'Content-Type': 'application/json' } })
+      toast.success('Campaign created successfully!')
+      navigate('/campaigns')
+    } catch (err) {
+      console.error(err)
+      toast.error(err.response?.data?.message || 'Failed to create campaign')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <DashboardLayout title="Create Campaign">
@@ -89,21 +125,22 @@ export default function CreateCampaign() {
 
       {/* Step 0: Platform */}
       {step === 0 && (
-        <StepPanel title="Select Platform" subtitle="Choose the advertising platform for your campaign">
+        <StepPanel title="Select Platforms" subtitle="Choose the advertising platforms for your campaign">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {['facebook', 'instagram', 'linkedin'].map(p => {
-              const colors = { facebook: '#1877f2', instagram: '#e1306c', linkedin: '#0077b5' }
               const names = { facebook: 'Facebook Ads', instagram: 'Instagram Ads', linkedin: 'LinkedIn Ads' }
               const descs = { facebook: 'Reach 3B+ users with targeted ads', instagram: 'Visual ads for engaged audiences', linkedin: 'B2B ads for professionals' }
+              const colors = { facebook: 'var(--color-brand-500)', instagram: '#ec4899', linkedin: '#0a66c2' }
+              
               return (
                 <button
                   key={p}
-                  onClick={() => update('platform', p)}
+                  onClick={() => togglePlatform(p)}
                   style={{
-                    padding: '24px 20px', borderRadius: 'var(--radius-xl)', textAlign: 'center',
-                    border: `2px solid ${campaign.platform === p ? colors[p] : 'var(--border-primary)'}`,
-                    background: campaign.platform === p ? `${colors[p]}0a` : 'var(--bg-secondary)',
-                    cursor: 'pointer', transition: 'all var(--transition-fast)', fontFamily: 'inherit',
+                    padding: 24, borderRadius: 'var(--radius-xl)', border: `2px solid ${campaign.platforms.includes(p) ? colors[p] : 'var(--border-primary)'}`,
+                    background: 'var(--bg-card)', cursor: 'pointer', textAlign: 'center', transition: 'all var(--transition-fast)',
+                    boxShadow: campaign.platforms.includes(p) ? `0 0 0 4px ${colors[p]}15` : 'var(--shadow-sm)',
+                    fontFamily: 'inherit'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
@@ -111,7 +148,7 @@ export default function CreateCampaign() {
                   </div>
                   <div style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', color: 'var(--text-primary)', marginBottom: 6 }}>{names[p]}</div>
                   <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>{descs[p]}</div>
-                  {campaign.platform === p && (
+                  {campaign.platforms.includes(p) && (
                     <div style={{ marginTop: 12, width: 24, height: 24, borderRadius: '50%', background: colors[p], display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '12px auto 0', color: 'white', fontSize: 12 }}>✓</div>
                   )}
                 </button>

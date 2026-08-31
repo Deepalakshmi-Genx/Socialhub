@@ -30,7 +30,6 @@ Route::prefix('auth')->group(function () {
 Route::prefix('oauth')->group(function () {
     Route::get('/instagram', [SocialAccountController::class, 'oauthInstagram']);
     Route::get('/instagram/callback', [SocialAccountController::class, 'oauthInstagramCallback']);
-    Route::get('/linkedin', [SocialAccountController::class, 'oauthLinkedIn']);
     Route::get('/linkedin/callback', [SocialAccountController::class, 'oauthLinkedInCallback']);
 });
 
@@ -67,6 +66,11 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Meta OAuth Initialization
         Route::get('/meta/url', [SocialAccountController::class, 'oauthMetaUrl']);
+        Route::get('/meta/pending', [SocialAccountController::class, 'getPendingMetaAccounts']);
+        Route::post('/meta/confirm', [SocialAccountController::class, 'confirmMetaAccounts']);
+        
+        // LinkedIn OAuth Initialization
+        Route::get('/oauth/linkedin', [SocialAccountController::class, 'oauthLinkedIn']);
         
         Route::get('/accounts/{id}', [SocialAccountController::class, 'show']);
         Route::get('/accounts/{id}/status', [SocialAccountController::class, 'checkStatus']);
@@ -112,9 +116,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Analytics
     Route::prefix('analytics')->group(function () {
-        Route::get('/overview', [AnalyticsController::class, 'overview']);
-        Route::get('/organic', [AnalyticsController::class, 'organic']);
-        Route::get('/advertising', [AnalyticsController::class, 'advertising']);
+        Route::get('/overview', [AnalyticsController::class, 'index']);
+        Route::get('/organic', [AnalyticsController::class, 'index']);
+        Route::get('/advertising', [AnalyticsController::class, 'index']);
         Route::get('/posts/{postId}', [AnalyticsController::class, 'postAnalytics']);
         Route::get('/accounts/{accountId}', [AnalyticsController::class, 'accountAnalytics']);
         Route::post('/sync', [AnalyticsController::class, 'syncNow']);

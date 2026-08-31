@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use App\Models\SocialAccount;
 use App\Models\AuditLog;
@@ -17,9 +18,10 @@ class SocialAccountController extends Controller
     public function oauthMetaUrl(Request $request)
     {
         $type = $request->query('type', 'page');
-        $state = Crypt::encryptString(json_encode(['user_id' => $request->user()->id, 'type' => $type]));
+        $target = $request->query('target');
+        $state = Crypt::encryptString(json_encode(['user_id' => $request->user()->id, 'type' => $type, 'target' => $target]));
 
-        $scope = 'pages_manage_posts,pages_read_engagement,ads_management,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_messages';
+        $scope = 'pages_show_list,business_management,pages_manage_posts,pages_read_engagement,ads_management,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_messages';
         if ($type === 'group') {
             $scope = 'publish_to_groups';
         }
@@ -45,6 +47,7 @@ class SocialAccountController extends Controller
             $stateData = json_decode(Crypt::decryptString($request->state), true);
             $user = \App\Models\User::findOrFail($stateData['user_id']);
             $type = $stateData['type'] ?? 'page';
+            $target = $stateData['target'] ?? null;
         } catch (\Exception $e) {
             return redirect(env('FRONTEND_URL') . '/accounts?error=invalid_state');
         }
@@ -58,6 +61,7 @@ class SocialAccountController extends Controller
         ]);
 
         if (!$response->ok()) {
+            \Log::error('Meta token exchange failed: ' . $response->body());
             return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
         }
 
@@ -88,44 +92,132 @@ class SocialAccountController extends Controller
 
         \Log::info("Facebook {$type}s fetched for user " . $user->id, ['accounts' => $pages, 'raw_response' => $pagesResponse->json()]);
 
+        $pendingAccounts = [];
+
         foreach ($pages as $page) {
-            SocialAccount::updateOrCreate(
-                ['platform' => 'facebook', 'platform_account_id' => $page['id'], 'user_id' => $user->id],
-                [
+            if (!$target || $target === 'facebook_page' || $target === 'facebook_group') {
+                $pendingAccounts[] = [
+                    'id'            => 'fb_' . $page['id'],
+                    'platform'      => 'facebook',
+                    'platform_account_id' => $page['id'],
                     'account_name'  => $page['name'],
                     'platform_type' => $type,
                     'access_token'  => Crypt::encryptString($type === 'group' ? $longLivedToken : $page['access_token']),
-                    'status'        => 'active',
-                    'connected_at'  => now(),
-                ]
-            );
+                ];
+            }
 
             // Connect Instagram Business Account if it exists on the page
             if (isset($page['instagram_business_account'])) {
                 $ig = $page['instagram_business_account'];
-                SocialAccount::updateOrCreate(
-                    ['platform' => 'instagram', 'platform_account_id' => $ig['id'], 'user_id' => $user->id],
-                    [
-                        'account_name'  => '@' . ($ig['username'] ?? 'unknown'),
+                $username = $ig['username'] ?? null;
+                $followers = $ig['followers_count'] ?? 0;
+
+                // Meta sometimes omits the username in the me/accounts edge, fetch it directly if needed
+                if (!$target || $target === 'instagram') {
+                    if (!$username) {
+                        $igProfile = Http::withoutVerifying()->get("https://graph.facebook.com/v19.0/{$ig['id']}", [
+                            'fields'       => 'username,followers_count',
+                            'access_token' => $page['access_token']
+                        ]);
+                        if ($igProfile->ok()) {
+                            $igData = $igProfile->json();
+                            $username = $igData['username'] ?? 'unknown';
+                            $followers = $igData['followers_count'] ?? 0;
+                        } else {
+                            $username = 'unknown';
+                        }
+                    }
+
+                    $pendingAccounts[] = [
+                        'id'            => 'ig_' . $ig['id'],
+                        'platform'      => 'instagram',
+                        'platform_account_id' => $ig['id'],
+                        'account_name'  => '@' . $username,
                         'platform_type' => 'business',
-                        'access_token'  => Crypt::encryptString($page['access_token']), // IG uses FB page token
-                        'followers'     => $ig['followers_count'] ?? 0,
+                        'access_token'  => Crypt::encryptString($page['access_token']),
+                        'followers'     => $followers,
+                    ];
+                }
+            }
+        }
+
+        if (empty($pendingAccounts)) {
+            return redirect(env('FRONTEND_URL') . '/accounts?error=no_accounts_found');
+        }
+
+        $cacheKey = (string) Str::uuid();
+        Cache::put("meta_pending_{$cacheKey}", $pendingAccounts, now()->addMinutes(15));
+
+        return redirect(env('FRONTEND_URL') . '/accounts?select_meta=' . $cacheKey);
+    }
+
+    public function getPendingMetaAccounts(Request $request)
+    {
+        $key = $request->query('key');
+        if (!$key || !Cache::has("meta_pending_{$key}")) {
+            return response()->json(['success' => false, 'error' => 'Session expired or invalid key'], 400);
+        }
+
+        $accounts = Cache::get("meta_pending_{$key}");
+        // Remove access tokens before sending to frontend
+        $safeAccounts = array_map(function ($acc) {
+            unset($acc['access_token']);
+            return $acc;
+        }, $accounts);
+
+        return response()->json(['success' => true, 'accounts' => $safeAccounts]);
+    }
+
+    public function confirmMetaAccounts(Request $request)
+    {
+        $request->validate([
+            'key' => 'required|string',
+            'selected_ids' => 'required|array',
+        ]);
+
+        $key = $request->input('key');
+        $selectedIds = $request->input('selected_ids');
+
+        if (!Cache::has("meta_pending_{$key}")) {
+            return response()->json(['success' => false, 'error' => 'Session expired'], 400);
+        }
+
+        $accounts = Cache::get("meta_pending_{$key}");
+        $user = $request->user();
+
+        $savedAccounts = [];
+
+        foreach ($accounts as $acc) {
+            if (in_array($acc['id'], $selectedIds)) {
+                $savedAccounts[] = SocialAccount::withTrashed()->updateOrCreate(
+                    ['platform' => $acc['platform'], 'platform_account_id' => $acc['platform_account_id'], 'user_id' => $user->id],
+                    [
+                        'account_name'  => $acc['account_name'],
+                        'platform_type' => $acc['platform_type'],
+                        'access_token'  => $acc['access_token'],
+                        'followers'     => $acc['followers'] ?? 0,
                         'status'        => 'active',
                         'connected_at'  => now(),
+                        'deleted_at'    => null,
                     ]
                 );
             }
         }
 
+        Cache::forget("meta_pending_{$key}");
+
         AuditLog::create([
             'user_id'     => $user->id,
             'action'      => 'account.connect',
             'module'      => 'Accounts',
-            'description' => 'Facebook pages connected.',
+            'description' => count($savedAccounts) . ' Facebook/Instagram accounts connected.',
             'ip_address'  => $request->ip(),
         ]);
 
-        return redirect(env('FRONTEND_URL') . '/accounts?success=facebook_connected');
+        return response()->json([
+            'success' => true,
+            'message' => 'Accounts connected successfully',
+        ]);
     }
 
     // ─── Instagram OAuth ─────────────────────────────────────────────────────
@@ -187,7 +279,7 @@ class SocialAccountController extends Controller
         $profile = $profileResponse->ok() ? $profileResponse->json() : ['id' => $igUserId, 'username' => 'unknown'];
         $user    = $request->user();
 
-        SocialAccount::updateOrCreate(
+        SocialAccount::withTrashed()->updateOrCreate(
             ['platform' => 'instagram', 'platform_account_id' => $profile['id'], 'user_id' => $user->id],
             [
                 'account_name'  => '@' . ($profile['username'] ?? 'unknown'),
@@ -197,6 +289,7 @@ class SocialAccountController extends Controller
                 'status'        => 'active',
                 'connected_at'  => now(),
                 'expires_at'    => now()->addDays(60),
+                'deleted_at'    => null,
             ]
         );
 
@@ -207,27 +300,40 @@ class SocialAccountController extends Controller
 
     public function oauthLinkedIn(Request $request)
     {
-        $state  = Str::random(40);
-        session(['oauth_state' => $state]);
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $state  = Crypt::encryptString(json_encode(['user_id' => $user->id, 'random' => Str::random(20)]));
 
         $params = http_build_query([
             'response_type' => 'code',
             'client_id'     => env('LINKEDIN_CLIENT_ID'),
             'redirect_uri'  => env('LINKEDIN_REDIRECT_URI'),
             'state'         => $state,
-            'scope'         => 'r_liteprofile r_emailaddress w_member_social r_ads w_ads rw_organization_admin r_organization_social w_organization_social',
+            'scope'         => env('LINKEDIN_SCOPES', 'openid profile email w_member_social'),
         ]);
 
-        return redirect("https://www.linkedin.com/oauth/v2/authorization?{$params}");
+        return response()->json(['url' => "https://www.linkedin.com/oauth/v2/authorization?{$params}"]);
     }
 
     public function oauthLinkedInCallback(Request $request)
     {
-        if ($request->has('error') || $request->state !== session('oauth_state')) {
+        if ($request->has('error')) {
+            \Log::error("LinkedIn OAuth returned an error", $request->all());
             return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
         }
 
-        $response = Http::asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
+        try {
+            $stateData = json_decode(Crypt::decryptString($request->state), true);
+            $user = \App\Models\User::findOrFail($stateData['user_id']);
+        } catch (\Exception $e) {
+            \Log::error("LinkedIn state decryption failed", ['error' => $e->getMessage()]);
+            return redirect(env('FRONTEND_URL') . '/accounts?error=invalid_state');
+        }
+
+        $response = Http::withoutVerifying()->asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
             'grant_type'    => 'authorization_code',
             'code'          => $request->code,
             'redirect_uri'  => env('LINKEDIN_REDIRECT_URI'),
@@ -243,18 +349,16 @@ class SocialAccountController extends Controller
         $accessToken = $tokenData['access_token'];
         $expiresIn   = $tokenData['expires_in'] ?? 5183944; // ~60 days
 
-        // Get member profile
-        $profileResp = Http::withToken($accessToken)
-            ->get('https://api.linkedin.com/v2/me', [
-                'projection' => '(id,firstName,lastName,vanityName)',
-            ]);
+        // Get member profile using OpenID Connect endpoint
+        $profileResp = Http::withoutVerifying()->withToken($accessToken)
+            ->get('https://api.linkedin.com/v2/userinfo');
 
         $profile = $profileResp->ok() ? $profileResp->json() : null;
-        $name    = $profile ? ($profile['localizedFirstName'] . ' ' . $profile['localizedLastName']) : 'LinkedIn User';
-        $user    = $request->user();
+        $name    = $profile ? ($profile['name'] ?? $profile['given_name'] . ' ' . $profile['family_name']) : 'LinkedIn User';
+        $linkedinId = $profile ? ($profile['sub'] ?? Str::random(10)) : Str::random(10);
 
-        SocialAccount::updateOrCreate(
-            ['platform' => 'linkedin', 'platform_account_id' => $profile['id'] ?? Str::random(10), 'user_id' => $user->id],
+        SocialAccount::withTrashed()->updateOrCreate(
+            ['platform' => 'linkedin', 'platform_account_id' => $linkedinId, 'user_id' => $user->id],
             [
                 'account_name'  => $name,
                 'platform_type' => 'personal',
@@ -262,6 +366,7 @@ class SocialAccountController extends Controller
                 'status'        => 'active',
                 'connected_at'  => now(),
                 'expires_at'    => now()->addSeconds($expiresIn),
+                'deleted_at'    => null,
             ]
         );
 

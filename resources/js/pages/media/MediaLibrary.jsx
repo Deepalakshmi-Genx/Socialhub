@@ -3,20 +3,7 @@ import { DashboardLayout } from '../../components/Layout'
 import { Button } from '../../components/ui'
 import { toast } from 'react-hot-toast'
 
-const MOCK_MEDIA = [
-  { id: 1, type: 'image', name: 'product-launch.jpg', size: '2.4 MB', url: 'https://picsum.photos/seed/1/400/400', created_at: '2024-03-15' },
-  { id: 2, type: 'image', name: 'team-photo.jpg', size: '3.1 MB', url: 'https://picsum.photos/seed/2/400/400', created_at: '2024-03-14' },
-  { id: 3, type: 'image', name: 'office-bg.jpg', size: '1.8 MB', url: 'https://picsum.photos/seed/3/400/400', created_at: '2024-03-12' },
-  { id: 4, type: 'image', name: 'product-detail.jpg', size: '2.2 MB', url: 'https://picsum.photos/seed/4/400/400', created_at: '2024-03-11' },
-  { id: 5, type: 'image', name: 'campaign-creative.jpg', size: '1.5 MB', url: 'https://picsum.photos/seed/5/400/400', created_at: '2024-03-10' },
-  { id: 6, type: 'image', name: 'brand-banner.jpg', size: '4.0 MB', url: 'https://picsum.photos/seed/6/400/400', created_at: '2024-03-08' },
-  { id: 7, type: 'image', name: 'instagram-post.jpg', size: '1.1 MB', url: 'https://picsum.photos/seed/7/400/400', created_at: '2024-03-06' },
-  { id: 8, type: 'image', name: 'linkedin-cover.jpg', size: '3.5 MB', url: 'https://picsum.photos/seed/8/400/400', created_at: '2024-03-05' },
-  { id: 9, type: 'image', name: 'facebook-ad.jpg', size: '2.8 MB', url: 'https://picsum.photos/seed/9/400/400', created_at: '2024-03-03' },
-  { id: 10, type: 'image', name: 'story-creative.jpg', size: '1.9 MB', url: 'https://picsum.photos/seed/10/400/400', created_at: '2024-03-01' },
-  { id: 11, type: 'video', name: 'product-demo.mp4', size: '18.2 MB', url: null, created_at: '2024-02-28' },
-  { id: 12, type: 'image', name: 'testimonial-bg.jpg', size: '2.0 MB', url: 'https://picsum.photos/seed/12/400/400', created_at: '2024-02-26' },
-]
+const MOCK_MEDIA = []
 
 export default function MediaLibrary() {
   const fileInputRef = useRef()

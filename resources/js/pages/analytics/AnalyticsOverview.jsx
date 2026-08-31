@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { DashboardLayout } from '../../components/Layout'
 import { Tabs, PlatformIcon } from '../../components/ui'
-import { MOCK_ANALYTICS } from '../../store'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -28,7 +28,7 @@ function MetricCard({ label, value, sub, trend, icon, color }) {
         <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
         <span style={{ fontSize: 18 }}>{icon}</span>
       </div>
-      <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1 }}>{value !== undefined ? value : '-'}</div>
       {sub && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{sub}</div>}
       {trend && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: trend.up ? 'var(--color-success-500)' : 'var(--color-error-500)' }}>
@@ -43,7 +43,28 @@ function MetricCard({ label, value, sub, trend, icon, color }) {
 export default function AnalyticsOverview() {
   const [tab, setTab] = useState('organic')
   const [range, setRange] = useState('14d')
-  const { organic, advertising, chart_data } = MOCK_ANALYTICS
+  
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState({
+    organic: {},
+    advertising: {},
+    chart_data: []
+  })
+
+  useEffect(() => {
+    setLoading(true)
+    axios.get(`/api/analytics/overview?range=${range.replace('d', '')}`)
+      .then(res => {
+        setData(res.data)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error(err)
+        setLoading(false)
+      })
+  }, [range])
+
+  const { organic, advertising, chart_data } = data
 
   const platformPieData = [
     { name: 'Facebook', value: 45 },
@@ -76,13 +97,13 @@ export default function AnalyticsOverview() {
           {/* Metrics */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
             <MetricCard label="Posts Published" value={organic.total_posts} icon="✍️" trend={{ up: true, value: '12%' }} />
-            <MetricCard label="Total Reach" value={organic.total_reach.toLocaleString()} icon="👥" trend={{ up: true, value: '18%' }} />
-            <MetricCard label="Total Impressions" value={organic.total_impressions.toLocaleString()} icon="👁" trend={{ up: true, value: '24%' }} />
-            <MetricCard label="Engagement Rate" value={`${organic.engagement_rate}%`} icon="❤️" trend={{ up: true, value: '0.5%' }} />
-            <MetricCard label="Total Likes" value={organic.total_likes.toLocaleString()} icon="👍" />
-            <MetricCard label="Total Comments" value={organic.total_comments.toLocaleString()} icon="💬" />
-            <MetricCard label="Total Shares" value={organic.total_shares.toLocaleString()} icon="🔁" />
-            <MetricCard label="Followers Growth" value={`+${organic.followers_growth}%`} icon="📈" trend={{ up: true, value: '2.1%' }} />
+            <MetricCard label="Total Reach" value={organic.total_reach?.toLocaleString()} icon="👥" trend={{ up: true, value: '18%' }} />
+            <MetricCard label="Total Impressions" value={organic.total_impressions?.toLocaleString()} icon="👁" trend={{ up: true, value: '24%' }} />
+            <MetricCard label="Engagement Rate" value={organic.engagement_rate !== undefined ? `${organic.engagement_rate}%` : undefined} icon="❤️" trend={{ up: true, value: '0.5%' }} />
+            <MetricCard label="Total Likes" value={organic.total_likes?.toLocaleString()} icon="👍" />
+            <MetricCard label="Total Comments" value={organic.total_comments?.toLocaleString()} icon="💬" />
+            <MetricCard label="Total Shares" value={organic.total_shares?.toLocaleString()} icon="🔁" />
+            <MetricCard label="Followers Growth" value={organic.followers_growth !== undefined ? `+${organic.followers_growth}%` : undefined} icon="📈" trend={{ up: true, value: '2.1%' }} />
           </div>
 
           {/* Charts row */}
@@ -171,13 +192,13 @@ export default function AnalyticsOverview() {
       {tab === 'advertising' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-            <MetricCard label="Total Spend" value={`$${advertising.total_spend.toFixed(0)}`} icon="💵" trend={{ up: false, value: '8%' }} />
-            <MetricCard label="Impressions" value={advertising.total_impressions.toLocaleString()} icon="👁" trend={{ up: true, value: '31%' }} />
-            <MetricCard label="Total Clicks" value={advertising.total_clicks.toLocaleString()} icon="🖱" trend={{ up: true, value: '15%' }} />
-            <MetricCard label="Avg CTR" value={`${advertising.avg_ctr}%`} icon="📊" trend={{ up: true, value: '0.3%' }} />
-            <MetricCard label="Avg CPC" value={`$${advertising.avg_cpc}`} icon="💰" sub="Cost per click" />
+            <MetricCard label="Total Spend" value={advertising.total_spend !== undefined ? `$${advertising.total_spend.toFixed(0)}` : undefined} icon="💵" trend={{ up: false, value: '8%' }} />
+            <MetricCard label="Impressions" value={advertising.total_impressions?.toLocaleString()} icon="👁" trend={{ up: true, value: '31%' }} />
+            <MetricCard label="Total Clicks" value={advertising.total_clicks?.toLocaleString()} icon="🖱" trend={{ up: true, value: '15%' }} />
+            <MetricCard label="Avg CTR" value={advertising.avg_ctr !== undefined ? `${advertising.avg_ctr}%` : undefined} icon="📊" trend={{ up: true, value: '0.3%' }} />
+            <MetricCard label="Avg CPC" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} icon="💰" sub="Cost per click" />
             <MetricCard label="Conversions" value={advertising.conversions} icon="🎯" trend={{ up: true, value: '22%' }} />
-            <MetricCard label="Cost/Conversion" value={`$${advertising.cost_per_conversion}`} icon="📉" trend={{ up: false, value: '5%' }} />
+            <MetricCard label="Cost/Conversion" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} icon="📉" trend={{ up: false, value: '5%' }} />
             <MetricCard label="Active Campaigns" value={4} icon="📢" />
           </div>
 

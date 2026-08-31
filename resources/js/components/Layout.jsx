@@ -72,9 +72,10 @@ export function Sidebar() {
               <NavLink
                 key={to}
                 to={to}
-                className={({ isActive }) =>
-                  clsx('sidebar-nav-item', isActive && 'active')
-                }
+                end
+                className={({ isActive }) => {
+                  return clsx('sidebar-nav-item', isActive && 'active')
+                }}
               >
                 <span className="nav-icon">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -128,7 +129,6 @@ export function Sidebar() {
           <Avatar name={user?.name} size="sm" />
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.name || 'User'}</div>
-            <div className="sidebar-user-role">{user?.plan || 'Free'} Plan</div>
           </div>
         </NavLink>
       </div>
@@ -241,7 +241,6 @@ export function Topbar({ title, actions }) {
                 </div>
                 {[
                   { label: 'Profile & Settings', to: '/settings' },
-                  { label: 'Billing & Plan', to: '/billing' },
                 ].map(item => (
                   <button
                     key={item.to}

@@ -26,7 +26,230 @@ const PLATFORM_INFO = {
   },
 }
 
-function AccountCard({ account, onDisconnect, onReconnect }) {
+function SelectMetaAccountsModal({ metaKey, onClose, onConfirm }) {
+  const [accounts, setAccounts] = useState([])
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (metaKey) {
+      setLoading(true)
+      axios.get(`/api/social/meta/pending?key=${metaKey}`)
+        .then(res => {
+          if (res.data.success) {
+            setAccounts(res.data.accounts)
+            // Pre-select all by default
+            setSelectedIds(new Set(res.data.accounts.map(a => a.id)))
+          }
+        })
+        .catch(err => {
+          toast.error('Failed to load pending accounts')
+          onClose()
+        })
+        .finally(() => setLoading(false))
+    }
+  }, [metaKey])
+
+  const toggleSelection = (id) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  const toggleAll = () => {
+    if (selectedIds.size === accounts.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(accounts.map(a => a.id)))
+  }
+
+  const handleConfirm = () => {
+    if (selectedIds.size === 0) {
+      toast.error('Please select at least one account')
+      return
+    }
+
+    setSubmitting(true)
+    axios.post('/api/social/meta/confirm', {
+      key: metaKey,
+      selected_ids: Array.from(selectedIds)
+    })
+    .then(res => {
+      if (res.data.success) {
+        toast.success(res.data.message)
+        onConfirm()
+      }
+    })
+    .catch(err => toast.error('Failed to connect accounts'))
+    .finally(() => setSubmitting(false))
+  }
+
+  if (!metaKey) return null;
+
+  return (
+    <Modal
+      isOpen={!!metaKey}
+      onClose={onClose}
+      title="Select Accounts"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={handleConfirm} disabled={submitting || loading}>
+            {submitting ? 'Connecting...' : 'Finish Connection'}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-tertiary)' }}>Loading accounts...</div>
+        ) : accounts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-tertiary)' }}>No accounts found.</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid var(--border-secondary)' }}>
+              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)' }}>
+                {selectedIds.size} selected
+              </span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-sm)', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedIds.size === accounts.length && accounts.length > 0} 
+                  onChange={toggleAll}
+                  style={{ cursor: 'pointer' }}
+                />
+                Select All
+              </label>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 300, overflowY: 'auto' }}>
+              {accounts.map(acc => (
+                <label 
+                  key={acc.id} 
+                  style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    padding: '12px 16px', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-lg)', 
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    background: selectedIds.has(acc.id) ? 'var(--bg-secondary)' : 'var(--bg-card)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: acc.platform === 'instagram' ? '50%' : 'var(--radius-md)', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <PlatformIcon platform={acc.platform} size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--font-size-sm)' }}>
+                        {acc.account_name}
+                      </div>
+                      <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {acc.platform === 'facebook' ? 'Page' : 'Instagram Business'}
+                      </div>
+                    </div>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.has(acc.id)}
+                    onChange={() => toggleSelection(acc.id)}
+                    style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                  />
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function AccountSettingsModal({ isOpen, onClose, account }) {
+  const [settings, setSettings] = useState({
+    requireApproval: true,
+    autoRetry: true,
+    notifySuccess: true,
+    notifyExpire: true,
+    postAsPage: true
+  });
+
+  useEffect(() => {
+    if (account) {
+      const saved = localStorage.getItem(`socialhub_settings_${account.id}`);
+      if (saved) {
+        try { setSettings(JSON.parse(saved)); } catch (e) {}
+      } else {
+        setSettings({ requireApproval: true, autoRetry: true, notifySuccess: true, notifyExpire: true, postAsPage: true });
+      }
+    }
+  }, [account]);
+
+  const handleSave = () => {
+    localStorage.setItem(`socialhub_settings_${account.id}`, JSON.stringify(settings));
+    toast.success('Settings saved successfully!');
+    onClose();
+  };
+
+  const updateSetting = (key, value) => setSettings(prev => ({ ...prev, [key]: value }));
+
+  if (!account) return null;
+
+  return (
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={`${account.account_name} Settings`} 
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSave}>Save Changes</Button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>Default Publishing Behavior</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={settings.requireApproval} onChange={e => updateSetting('requireApproval', e.target.checked)} style={{ cursor: 'pointer' }} /> Require approval before publishing
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={settings.autoRetry} onChange={e => updateSetting('autoRetry', e.target.checked)} style={{ cursor: 'pointer' }} /> Auto-retry failed posts (up to 1 time)
+            </label>
+          </div>
+        </div>
+        
+        <div style={{ height: 1, background: 'var(--border-secondary)' }} />
+        
+        <div>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>Email Notifications</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={settings.notifySuccess} onChange={e => updateSetting('notifySuccess', e.target.checked)} style={{ cursor: 'pointer' }} /> Notify me when a post is successfully published
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={settings.notifyExpire} onChange={e => updateSetting('notifyExpire', e.target.checked)} style={{ cursor: 'pointer' }} /> Notify me if this account connection expires
+            </label>
+          </div>
+        </div>
+        
+        {account.platform === 'facebook' && (
+          <>
+            <div style={{ height: 1, background: 'var(--border-secondary)' }} />
+            <div>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>Facebook Preferences</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--font-size-sm)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={settings.postAsPage} onChange={e => updateSetting('postAsPage', e.target.checked)} style={{ cursor: 'pointer' }} /> Publish posts as the Page identity
+                </label>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function AccountCard({ account, onDisconnect, onReconnect, onSettingsClick }) {
   const info = PLATFORM_INFO[account.platform]
   const isExpired = account.status === 'expired'
 
@@ -40,7 +263,10 @@ function AccountCard({ account, onDisconnect, onReconnect }) {
             </div>
             <div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 'var(--font-size-md)' }}>{account.account_name}</div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>{info.name} · {account.followers?.toLocaleString()} followers</div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {info.name}
+                {account.followers > 0 && ` · ${account.followers.toLocaleString()} followers`}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -66,19 +292,15 @@ function AccountCard({ account, onDisconnect, onReconnect }) {
           ))}
         </div>
 
-        {/* Stats row */}
+        {/* Stats row - Currently only showing connected date as backend metrics aren't built yet */}
         {!isExpired && (
           <div style={{ display: 'flex', gap: 24, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-secondary)' }}>
-            {[
-              { label: 'Posts This Month', value: Math.floor(Math.random() * 20) + 5 },
-              { label: 'Connected Since', value: account.connected_at },
-              { label: 'Last Published', value: '2 days ago' },
-            ].map((s, i) => (
-              <div key={i}>
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
-                <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>{s.value}</div>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Connected Since</div>
+              <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                {new Date(account.connected_at).toLocaleDateString()}
               </div>
-            ))}
+            </div>
           </div>
         )}
 
@@ -91,7 +313,7 @@ function AccountCard({ account, onDisconnect, onReconnect }) {
       </div>
 
       <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-        <Button variant="ghost" size="sm" onClick={() => toast.success('Opening account settings...')}>
+        <Button variant="ghost" size="sm" onClick={() => onSettingsClick(account)}>
           Settings
         </Button>
         {isExpired ? (
@@ -121,7 +343,7 @@ function ConnectModal({ isOpen, onClose }) {
     setConnecting(platform)
     if (platform === 'facebook_page' || platform === 'facebook_group' || platform === 'instagram') {
       const type = platform === 'facebook_group' ? 'group' : 'page'
-      axios.get(`/api/social/meta/url?type=${type}`)
+      axios.get(`/api/social/meta/url?type=${type}&target=${platform}`)
         .then(res => {
           if (res.data.url) {
             window.location.href = res.data.url
@@ -131,6 +353,17 @@ function ConnectModal({ isOpen, onClose }) {
           toast.error('Failed to initialize Meta login')
           setConnecting(null)
           setShowFbOptions(false)
+        })
+    } else if (platform === 'linkedin') {
+      axios.get(`/api/social/oauth/linkedin`)
+        .then(res => {
+          if (res.data.url) {
+            window.location.href = res.data.url
+          }
+        })
+        .catch(err => {
+          toast.error('Failed to initialize LinkedIn login')
+          setConnecting(null)
         })
     } else {
       window.location.href = `/api/oauth/${platform}`
@@ -258,14 +491,20 @@ export default function ConnectedAccounts() {
   const [loading, setLoading] = useState(true)
   const [connectModalOpen, setConnectModalOpen] = useState(false)
   const [disconnectTarget, setDisconnectTarget] = useState(null)
+  const [settingsTarget, setSettingsTarget] = useState(null)
+  const [selectMetaKey, setSelectMetaKey] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
     // Check for OAuth callbacks
     const successMsg = searchParams.get('success')
     const errorMsg = searchParams.get('error')
+    const metaKey = searchParams.get('select_meta')
 
-    if (successMsg === 'facebook_connected') {
+    if (metaKey) {
+      setSelectMetaKey(metaKey)
+      setSearchParams(new URLSearchParams())
+    } else if (successMsg === 'facebook_connected' || successMsg === 'meta_connected') {
       toast.success('Facebook account(s) successfully connected!')
       setSearchParams(new URLSearchParams())
     } else if (errorMsg) {
@@ -371,6 +610,7 @@ export default function ConnectedAccounts() {
               account={acc}
               onDisconnect={handleDisconnect}
               onReconnect={handleReconnect}
+              onSettingsClick={(acc) => setSettingsTarget(acc)}
             />
           ))}
         </div>
@@ -378,6 +618,13 @@ export default function ConnectedAccounts() {
 
       {/* Connect Modal */}
       <ConnectModal isOpen={connectModalOpen} onClose={() => setConnectModalOpen(false)} />
+
+      {/* Select Meta Accounts Modal */}
+      <SelectMetaAccountsModal 
+        metaKey={selectMetaKey} 
+        onClose={() => setSelectMetaKey(null)} 
+        onConfirm={() => { setSelectMetaKey(null); fetchAccounts(); }} 
+      />
 
       {/* Disconnect Confirm Modal */}
       <Modal
@@ -397,6 +644,13 @@ export default function ConnectedAccounts() {
           <p>All scheduled posts for this account will be cancelled. This action cannot be undone.</p>
         </div>
       </Modal>
+
+      {/* Account Settings Modal */}
+      <AccountSettingsModal 
+        isOpen={!!settingsTarget} 
+        onClose={() => setSettingsTarget(null)} 
+        account={settingsTarget} 
+      />
     </DashboardLayout>
   )
 }

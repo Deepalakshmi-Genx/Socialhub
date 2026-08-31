@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { DashboardLayout } from '../../components/Layout'
 import { Button, PlatformIcon, Avatar } from '../../components/ui'
@@ -7,6 +7,13 @@ import { useSocialAccountsStore, usePostsStore } from '../../store'
 import axios from 'axios'
 
 const PLATFORM_COLORS = { facebook: '#1877f2', instagram: '#e1306c', linkedin: '#0077b5' }
+
+const getBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = error => reject(error);
+});
 
 function PlatformPreview({ platform, account, content, media }) {
   if (!platform || !account) {
@@ -32,7 +39,7 @@ function PlatformPreview({ platform, account, content, media }) {
         </div>
         <div style={{ marginLeft: 'auto', color: '#65676b', fontSize: 20 }}>···</div>
       </div>
-      {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#1c1e21', lineHeight: 1.6 }}>{content}</div>}
+      {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#1c1e21', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{content}</div>}
       {media && <img src={media} alt="Post media" style={{ width: '100%', maxHeight: 280, objectFit: 'cover' }} />}
       <div style={{ padding: '8px 16px', borderTop: '1px solid #e4e6eb', display: 'flex', gap: 20 }}>
         {['👍 Like', '💬 Comment', '🔁 Share'].map(a => (
@@ -66,7 +73,7 @@ function PlatformPreview({ platform, account, content, media }) {
           {['❤️', '💬', '📤'].map(icon => <span key={icon} style={{ fontSize: 22, cursor: 'pointer' }}>{icon}</span>)}
           <span style={{ marginLeft: 'auto', fontSize: 22 }}>🔖</span>
         </div>
-        <div style={{ fontSize: 14, color: '#262626', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, color: '#262626', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
           <strong>{account.account_name}</strong>{' '}
           {content || <span style={{ color: '#c7c7c7' }}>Write a caption...</span>}
         </div>
@@ -86,7 +93,7 @@ function PlatformPreview({ platform, account, content, media }) {
         </div>
         <div style={{ marginLeft: 'auto', cursor: 'pointer', color: '#00000099', fontSize: 20 }}>···</div>
       </div>
-      {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#000000de', lineHeight: 1.6 }}>{content}</div>}
+      {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#000000de', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{content}</div>}
       {media && <img src={media} alt="Post" style={{ width: '100%', maxHeight: 280, objectFit: 'cover' }} />}
       <div style={{ padding: '6px 16px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: 16 }}>
         {['👍 Like', '💬 Comment', '🔁 Repost', '📤 Send'].map(a => (
@@ -102,12 +109,12 @@ function PlatformPreview({ platform, account, content, media }) {
 
 export default function CreatePost() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const { id } = useParams()
+  const isEditing = !!id
   const fileInputRef = useRef()
 
   const [form, setForm] = useState({
-    platform: '',
-    accountId: '',
+    accountIds: [],
     content: '',
     hashtags: '',
     link: '',
@@ -115,6 +122,10 @@ export default function CreatePost() {
     scheduledAt: '',
     publishNow: true,
   })
+  
+  const [overrides, setOverrides] = useState({})
+  const [activeTab, setActiveTab] = useState('default')
+
   const [media, setMedia] = useState(null)
   const [mediaPreview, setMediaPreview] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -127,11 +138,46 @@ export default function CreatePost() {
     if (!accountsFetched) fetchAccounts()
   }, [accountsFetched, fetchAccounts])
 
-  const selectedAccount = accounts.find(a => String(a.id) === form.accountId)
-  const platformAccounts = accounts.filter(a => a.platform === form.platform && a.status === 'active')
+  useEffect(() => {
+    if (isEditing) {
+      axios.get(`/api/posts/${id}`).then(res => {
+        if (res.data.success) {
+          const p = res.data.post
+          setForm({
+            accountIds: [String(p.social_account_id)],
+            content: p.content || '',
+            hashtags: p.hashtags || '',
+            link: p.link || '',
+            postType: p.post_type || 'text',
+            scheduledAt: p.scheduled_at ? p.scheduled_at.substring(0, 16) : '',
+            publishNow: p.status === 'published' || p.status === 'queued' || !p.scheduled_at,
+          })
+          if (p.media_path) {
+            setMediaPreview(p.media_path)
+          }
+        }
+      }).catch(err => {
+        toast.error('Failed to load post data')
+      })
+    }
+  }, [isEditing, id])
 
-  const CHAR_LIMITS = { facebook: 63206, instagram: 2200, linkedin: 3000 }
-  const charLimit = CHAR_LIMITS[form.platform] || 2200
+  const toggleAccount = (accId) => {
+    setForm(f => {
+      if (isEditing) return { ...f, accountIds: [accId] };
+      const ids = f.accountIds.includes(accId) ? f.accountIds.filter(i => i !== accId) : [...f.accountIds, accId];
+      
+      if (!f.accountIds.includes(accId)) {
+        setOverrides(o => ({
+          ...o,
+          [accId]: { enabled: false, content: f.content, hashtags: f.hashtags, link: f.link, publishNow: f.publishNow, scheduledAt: f.scheduledAt }
+        }));
+      } else {
+        if (activeTab === accId) setActiveTab('default');
+      }
+      return { ...f, accountIds: ids };
+    });
+  }
 
   const handleMediaChange = (e) => {
     const file = e.target.files[0]
@@ -143,32 +189,87 @@ export default function CreatePost() {
     reader.readAsDataURL(file)
   }
 
-  const handleContentChange = (e) => {
-    const val = e.target.value
-    setForm(f => ({ ...f, content: val }))
-    setCharCount(val.length)
+  const updateField = (field, value) => {
+    if (activeTab === 'default') {
+      setForm(f => ({ ...f, [field]: value }))
+      if (field === 'content') setCharCount(value.length)
+    } else {
+      setOverrides(o => ({
+        ...o,
+        [activeTab]: {
+          ...o[activeTab],
+          [field]: value
+        }
+      }))
+      if (field === 'content') setCharCount(value.length)
+    }
   }
 
   const handlePublish = async () => {
-    if (!form.platform) { toast.error('Please select a platform'); return }
-    if (!form.accountId) { toast.error('Please select an account'); return }
-    if (!form.content.trim() && !media) { toast.error('Add content or media to publish'); return }
-    if (!form.publishNow && !form.scheduledAt) { toast.error('Please select a schedule date & time'); return }
-
+    if (form.accountIds.length === 0) { toast.error('Please select at least one account'); return }
+    if (!form.content.trim() && !media && !Object.values(overrides).some(o => o.enabled && o.content.trim())) { toast.error('Add content or media to publish'); return }
+    
     setLoading(true)
     
     try {
-      const formData = new FormData()
-      formData.append('social_account_id', form.accountId)
-      formData.append('content', form.content)
-      formData.append('status', form.publishNow ? 'published' : 'scheduled')
-      if (form.scheduledAt) formData.append('scheduled_at', form.scheduledAt)
-      if (media) formData.append('media', media) // Backend needs MediaController/upload or support direct attach
-      
-      const res = await axios.post('/api/posts', formData)
+      let mediaBase64 = null;
+      if (media) {
+        mediaBase64 = await getBase64(media);
+      }
+
+      let res;
+      if (isEditing) {
+        const payload = {
+          social_account_id: form.accountIds[0],
+          content: form.content,
+          status: form.publishNow ? 'publish_now' : 'scheduled',
+          post_type: media ? (media.type.startsWith('video/') ? 'video' : 'image') : form.postType,
+        };
+        if (form.scheduledAt) payload.scheduled_at = new Date(form.scheduledAt).toISOString();
+        if (mediaBase64) payload.media_base64 = mediaBase64;
+
+        
+        res = await axios.put(`/api/posts/${id}`, payload, { headers: { 'Content-Type': 'application/json' } });
+      } else {
+        const payload = {
+          post_type: media ? (media.type.startsWith('video/') ? 'video' : 'image') : 'text',
+          posts: form.accountIds.map(accId => {
+            const ov = overrides[accId]?.enabled ? overrides[accId] : form;
+            return {
+              social_account_id: accId,
+              content: ov.content,
+              hashtags: ov.hashtags,
+              link: ov.link,
+              status: ov.publishNow ? 'publish_now' : 'scheduled',
+              scheduled_at: ov.scheduledAt ? new Date(ov.scheduledAt).toISOString() : null
+            }
+          })
+        };
+        if (mediaBase64) payload.media_base64 = mediaBase64;
+        
+        res = await axios.post('/api/posts', payload, { headers: { 'Content-Type': 'application/json' } });
+      }
       
       if (res.data.success) {
-        toast.success(form.publishNow ? 'Post published successfully! 🎉' : 'Post scheduled! 📅')
+        let hasFailed = false;
+        
+        if (isEditing) {
+          if (res.data.post && res.data.post.status === 'failed') {
+            hasFailed = true;
+          }
+        } else {
+          const posts = res.data.posts || [];
+          if (posts.some(p => p.status === 'failed')) {
+            hasFailed = true;
+          }
+        }
+
+        if (hasFailed) {
+          toast.error('One or more posts failed to publish. Check the posts list for details.');
+        } else {
+          toast.success(form.publishNow ? `Post ${isEditing ? 'updated' : 'published'} successfully! 🎉` : `Post ${isEditing ? 'updated' : 'scheduled'}! 📅`);
+        }
+        
         fetchPosts() // refresh posts store
         navigate('/posts')
       }
@@ -180,228 +281,316 @@ export default function CreatePost() {
     }
   }
 
-  const fullContent = [
-    form.content,
-    form.hashtags && form.hashtags.split(' ').filter(Boolean).map(h => h.startsWith('#') ? h : `#${h}`).join(' '),
-    form.link,
-  ].filter(Boolean).join('\n\n')
+  const currentContent = activeTab === 'default' || !overrides[activeTab]?.enabled ? form.content : overrides[activeTab].content;
+  const currentHashtags = activeTab === 'default' || !overrides[activeTab]?.enabled ? form.hashtags : overrides[activeTab].hashtags;
+  const currentLink = activeTab === 'default' || !overrides[activeTab]?.enabled ? form.link : overrides[activeTab].link;
+  const currentPublishNow = activeTab === 'default' || !overrides[activeTab]?.enabled ? form.publishNow : overrides[activeTab].publishNow;
+  const currentScheduledAt = activeTab === 'default' || !overrides[activeTab]?.enabled ? form.scheduledAt : overrides[activeTab].scheduledAt;
+
+  const selectedAccountDetails = activeTab !== 'default' ? accounts.find(a => String(a.id) === activeTab) : null;
+  const isOverrideEnabled = activeTab !== 'default' && overrides[activeTab]?.enabled;
+  const opacity = (activeTab !== 'default' && !isOverrideEnabled) ? 0.5 : 1;
+  const pointerEvents = (activeTab !== 'default' && !isOverrideEnabled) ? 'none' : 'auto';
 
   return (
-    <DashboardLayout title="Create Post">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24, height: 'calc(100vh - 130px)', overflow: 'hidden' }}>
+    <DashboardLayout title={isEditing ? 'Edit Post' : 'Create Post'}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: 24, height: 'calc(100vh - 130px)', overflow: 'hidden' }}>
         {/* Left: Composer */}
-        <div style={{ overflow: 'auto', paddingRight: 4 }}>
+        <div style={{ overflow: 'auto', paddingRight: 4, paddingBottom: 64 }}>
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
               <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Select Platform & Account</h3>
             </div>
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Platform selector */}
               <div>
-                <label className="form-label">Platform</label>
-                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                  {['facebook', 'instagram', 'linkedin'].map(p => (
+                {accounts.filter(a => a.status === 'active').length === 0 ? (
+                  <div style={{ padding: '12px 16px', background: 'var(--color-warning-50)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--font-size-sm)', color: 'var(--color-warning-600)', marginTop: 8 }}>
+                    No active accounts found. <button onClick={() => navigate('/accounts')} style={{ fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit' }}>Connect one →</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
+                    {['facebook', 'instagram', 'linkedin'].map(p => {
+                      const platformAccs = accounts.filter(a => a.platform === p && a.status === 'active');
+                      if (platformAccs.length === 0) return null;
+                      return (
+                        <div key={p} style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-primary)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: PLATFORM_COLORS[p], fontWeight: 600, fontSize: 'var(--font-size-xs)', textTransform: 'uppercase' }}>
+                            <PlatformIcon platform={p} size={14} /> {p}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                            {platformAccs.map(a => (
+                              <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isEditing ? 'not-allowed' : 'pointer', fontSize: 'var(--font-size-sm)', background: 'var(--bg-primary)', padding: '6px 12px', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-primary)' }}>
+                                <input 
+                                  type={isEditing ? "radio" : "checkbox"} 
+                                  checked={form.accountIds.includes(String(a.id))} 
+                                  onChange={() => !isEditing && toggleAccount(String(a.id))}
+                                  disabled={isEditing}
+                                  style={{ accentColor: PLATFORM_COLORS[p], width: 14, height: 14 }}
+                                />
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{a.account_name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Customization Tabs */}
+          {form.accountIds.length > 0 && !isEditing && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
+              <button
+                onClick={() => { setActiveTab('default'); setCharCount(form.content.length); }}
+                style={{ padding: '8px 16px', borderRadius: 'var(--radius-full)', border: 'none', background: activeTab === 'default' ? 'var(--color-brand-500)' : 'var(--bg-secondary)', color: activeTab === 'default' ? 'white' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', transition: '0.2s' }}
+              >
+                Default Options
+              </button>
+              {form.accountIds.map(id => {
+                const acc = accounts.find(a => String(a.id) === id);
+                if (!acc) return null;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => { setActiveTab(id); setCharCount(overrides[id]?.content?.length || form.content.length); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 'var(--radius-full)', border: 'none', background: activeTab === id ? 'var(--color-brand-500)' : 'var(--bg-secondary)', color: activeTab === id ? 'white' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', transition: '0.2s' }}
+                  >
+                    <PlatformIcon platform={acc.platform} size={14} color={activeTab === id ? 'white' : undefined} />
+                    {acc.account_name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {activeTab !== 'default' && (
+            <div style={{ marginBottom: 16, padding: '12px 16px', background: isOverrideEnabled ? 'var(--color-success-50)' : 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: isOverrideEnabled ? '1px solid var(--color-success-200)' : '1px solid transparent', transition: '0.2s' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <PlatformIcon platform={selectedAccountDetails?.platform} size={18} />
+                <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>
+                  Customize for {selectedAccountDetails?.account_name}
+                </div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isOverrideEnabled}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setOverrides(o => ({
+                      ...o,
+                      [activeTab]: {
+                        ...o[activeTab],
+                        enabled,
+                        content: enabled ? o[activeTab].content || form.content : form.content,
+                        hashtags: enabled ? o[activeTab].hashtags || form.hashtags : form.hashtags,
+                        link: enabled ? o[activeTab].link || form.link : form.link,
+                        publishNow: enabled ? o[activeTab].publishNow ?? form.publishNow : form.publishNow,
+                        scheduledAt: enabled ? o[activeTab].scheduledAt || form.scheduledAt : form.scheduledAt,
+                      }
+                    }))
+                  }}
+                  style={{ accentColor: 'var(--color-success-500)', width: 18, height: 18 }}
+                />
+                Enable Overrides
+              </label>
+            </div>
+          )}
+
+          <div style={{ opacity, pointerEvents, transition: '0.2s' }}>
+            {/* Content */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Content</h3>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: charCount > 2200 ? 'var(--color-error-500)' : 'var(--text-tertiary)', fontWeight: 600 }}>
+                  {charCount} chars
+                </span>
+              </div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label">Caption / Text</label>
+                  <textarea
+                    className="form-textarea"
+                    placeholder={`Write your social media post here...\n\nTip: Use line breaks, emojis, and @mentions for better engagement!`}
+                    value={currentContent}
+                    onChange={(e) => updateField('content', e.target.value)}
+                    rows={6}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <div className="form-group">
+                    <label className="form-label">Hashtags</label>
+                    <input
+                      className="form-input"
+                      placeholder="#marketing #socialmedia"
+                      value={currentHashtags}
+                      onChange={(e) => updateField('hashtags', e.target.value)}
+                    />
+                    <span className="form-hint">Separate with spaces</span>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Link (optional)</label>
+                    <input
+                      className="form-input"
+                      placeholder="https://yourwebsite.com"
+                      type="url"
+                      value={currentLink}
+                      onChange={(e) => updateField('link', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Media */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Media</h3>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>Applies to all accounts</span>
+              </div>
+              <div className="card-body">
+                {mediaPreview ? (
+                  <div style={{ position: 'relative' }}>
+                    <img src={mediaPreview} alt="Preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 'var(--radius-lg)' }} />
                     <button
-                      key={p}
-                      onClick={() => setForm(f => ({ ...f, platform: p, accountId: '' }))}
+                      onClick={() => { setMedia(null); setMediaPreview(null) }}
                       style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        padding: '10px 16px', borderRadius: 'var(--radius-lg)',
-                        border: `2px solid ${form.platform === p ? PLATFORM_COLORS[p] : 'var(--border-primary)'}`,
-                        background: form.platform === p ? `${PLATFORM_COLORS[p]}10` : 'var(--bg-secondary)',
-                        cursor: 'pointer', transition: 'all var(--transition-fast)', fontFamily: 'inherit',
-                        fontWeight: 600, fontSize: 'var(--font-size-sm)',
-                        color: form.platform === p ? PLATFORM_COLORS[p] : 'var(--text-secondary)',
+                        position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+                      }}
+                    >×</button>
+                  </div>
+                ) : (
+                  <div
+                    className="upload-zone"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ padding: '32px' }}
+                  >
+                    <div className="upload-zone-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                      </svg>
+                    </div>
+                    <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Click to upload or drag & drop
+                    </p>
+                    <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
+                      PNG, JPG, GIF, MP4 up to 50MB
+                    </p>
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleMediaChange} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Schedule */}
+            <div className="card">
+              <div className="card-header">
+                <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Publishing Schedule</h3>
+              </div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {[
+                    { label: 'Publish Now', value: true },
+                    { label: 'Schedule', value: false },
+                  ].map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      onClick={() => updateField('publishNow', opt.value)}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: 'var(--radius-lg)',
+                        border: `2px solid ${currentPublishNow === opt.value ? 'var(--color-brand-500)' : 'var(--border-primary)'}`,
+                        background: currentPublishNow === opt.value ? 'var(--bg-active)' : 'var(--bg-secondary)',
+                        color: currentPublishNow === opt.value ? 'var(--color-brand-600)' : 'var(--text-secondary)',
+                        fontWeight: 600, fontSize: 'var(--font-size-sm)', cursor: 'pointer',
+                        transition: 'all var(--transition-fast)', fontFamily: 'inherit',
                       }}
                     >
-                      <PlatformIcon platform={p} size={18} />
-                      <span className="hide-mobile">{p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                      {opt.value ? '⚡ Publish Now' : '📅 Schedule'}
                     </button>
                   ))}
                 </div>
-              </div>
 
-              {/* Account selector */}
-              {form.platform && (
-                <div className="form-group">
-                  <label className="form-label">Account / Page</label>
-                  {platformAccounts.length === 0 ? (
-                    <div style={{ padding: '12px 16px', background: 'var(--color-warning-50)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--font-size-sm)', color: 'var(--color-warning-600)' }}>
-                      No active {form.platform} accounts. <button onClick={() => navigate('/accounts')} style={{ fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit' }}>Connect one →</button>
+                {!currentPublishNow && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="animate-slide-up">
+                    <div className="form-group">
+                      <label className="form-label">Date</label>
+                      <input type="date" className="form-input" value={(currentScheduledAt || '').split('T')[0] || ''} min={new Date().toISOString().split('T')[0]}
+                        onChange={e => updateField('scheduledAt', `${e.target.value}T${(currentScheduledAt || '').split('T')[1] || '09:00'}`)} />
                     </div>
-                  ) : (
-                    <select className="form-select" value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}>
-                      <option value="">Select account...</option>
-                      {platformAccounts.map(a => <option key={a.id} value={a.id}>{a.account_name}</option>)}
-                    </select>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header">
-              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Content</h3>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: charCount > charLimit * 0.9 ? 'var(--color-error-500)' : 'var(--text-tertiary)', fontWeight: 600 }}>
-                {charCount} / {charLimit.toLocaleString()}
-              </span>
-            </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="form-group">
-                <label className="form-label">Caption / Text</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder={`Write your ${form.platform || 'social media'} post here...\n\nTip: Use line breaks, emojis, and @mentions for better engagement!`}
-                  value={form.content}
-                  onChange={handleContentChange}
-                  rows={6}
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div className="form-group">
-                  <label className="form-label">Hashtags</label>
-                  <input
-                    className="form-input"
-                    placeholder="#marketing #socialmedia"
-                    value={form.hashtags}
-                    onChange={e => setForm(f => ({ ...f, hashtags: e.target.value }))}
-                  />
-                  <span className="form-hint">Separate with spaces</span>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Link (optional)</label>
-                  <input
-                    className="form-input"
-                    placeholder="https://yourwebsite.com"
-                    type="url"
-                    value={form.link}
-                    onChange={e => setForm(f => ({ ...f, link: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Media */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header">
-              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Media</h3>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>Optional</span>
-            </div>
-            <div className="card-body">
-              {mediaPreview ? (
-                <div style={{ position: 'relative' }}>
-                  <img src={mediaPreview} alt="Preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 'var(--radius-lg)' }} />
-                  <button
-                    onClick={() => { setMedia(null); setMediaPreview(null) }}
-                    style={{
-                      position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%',
-                      background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-                    }}
-                  >×</button>
-                </div>
-              ) : (
-                <div
-                  className="upload-zone"
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ padding: '32px' }}
-                >
-                  <div className="upload-zone-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                    </svg>
+                    <div className="form-group">
+                      <label className="form-label">Time</label>
+                      <input type="time" className="form-input" value={(currentScheduledAt || '').split('T')[1] || '09:00'}
+                        onChange={e => updateField('scheduledAt', `${(currentScheduledAt || '').split('T')[0] || new Date().toISOString().split('T')[0]}T${e.target.value}`)} />
+                    </div>
                   </div>
-                  <p style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Click to upload or drag & drop
-                  </p>
-                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
-                    PNG, JPG, GIF, MP4 up to 50MB
-                  </p>
-                  <input ref={fileInputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleMediaChange} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Schedule */}
-          <div className="card">
-            <div className="card-header">
-              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Publishing</h3>
-            </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', gap: 12 }}>
-                {[
-                  { label: 'Publish Now', value: true },
-                  { label: 'Schedule', value: false },
-                ].map(opt => (
-                  <button
-                    key={String(opt.value)}
-                    onClick={() => setForm(f => ({ ...f, publishNow: opt.value }))}
-                    style={{
-                      flex: 1, padding: '10px', borderRadius: 'var(--radius-lg)',
-                      border: `2px solid ${form.publishNow === opt.value ? 'var(--color-brand-500)' : 'var(--border-primary)'}`,
-                      background: form.publishNow === opt.value ? 'var(--bg-active)' : 'var(--bg-secondary)',
-                      color: form.publishNow === opt.value ? 'var(--color-brand-600)' : 'var(--text-secondary)',
-                      fontWeight: 600, fontSize: 'var(--font-size-sm)', cursor: 'pointer',
-                      transition: 'all var(--transition-fast)', fontFamily: 'inherit',
-                    }}
-                  >
-                    {opt.value ? '⚡ Publish Now' : '📅 Schedule'}
-                  </button>
-                ))}
-              </div>
-
-              {!form.publishNow && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="animate-slide-up">
-                  <div className="form-group">
-                    <label className="form-label">Date</label>
-                    <input type="date" className="form-input" value={form.scheduledAt.split('T')[0] || ''} min={new Date().toISOString().split('T')[0]}
-                      onChange={e => setForm(f => ({ ...f, scheduledAt: `${e.target.value}T${form.scheduledAt.split('T')[1] || '09:00'}` }))} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Time</label>
-                    <input type="time" className="form-input" value={form.scheduledAt.split('T')[1] || '09:00'}
-                      onChange={e => setForm(f => ({ ...f, scheduledAt: `${form.scheduledAt.split('T')[0] || new Date().toISOString().split('T')[0]}T${e.target.value}` }))} />
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 12 }}>
-                <Button variant="secondary" fullWidth onClick={() => navigate('/posts')}>
-                  Save as Draft
-                </Button>
-                <Button variant="primary" fullWidth loading={loading} onClick={handlePublish}>
-                  {form.publishNow ? '🚀 Publish Now' : '📅 Schedule Post'}
-                </Button>
+                )}
               </div>
             </div>
+            
+            <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+              <Button variant="secondary" fullWidth onClick={() => navigate('/posts')}>
+                Save as Draft
+              </Button>
+              <Button variant="primary" fullWidth loading={loading} onClick={handlePublish}>
+                {form.publishNow ? '🚀 Publish All' : '📅 Schedule All'}
+              </Button>
+            </div>
+            
           </div>
         </div>
 
-        {/* Right: Preview */}
-        <div style={{ overflow: 'auto' }}>
-          <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="card-header">
-              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Live Preview</h3>
-              {form.platform && (
-                <span style={{ fontSize: 'var(--font-size-xs)', padding: '2px 8px', background: `${PLATFORM_COLORS[form.platform]}18`, color: PLATFORM_COLORS[form.platform], borderRadius: 'var(--radius-full)', fontWeight: 600 }}>
-                  {form.platform.charAt(0).toUpperCase() + form.platform.slice(1)}
-                </span>
-              )}
-            </div>
-            <div className="card-body" style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 24 }}>
-              <PlatformPreview
-                platform={form.platform}
-                account={selectedAccount}
-                content={fullContent}
-                media={mediaPreview}
-              />
-            </div>
+        {/* Right: Previews */}
+        <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Live Previews</h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', paddingRight: 8, paddingBottom: 64 }}>
+            {form.accountIds.length === 0 ? (
+              <div className="card" style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', fontSize: 'var(--font-size-sm)' }}>
+                Select accounts to see previews
+              </div>
+            ) : form.accountIds.map(id => {
+              const acc = accounts.find(a => String(a.id) === id);
+              if (!acc) return null;
+              
+              const ov = overrides[id]?.enabled ? overrides[id] : form;
+              const fullText = [
+                ov.content,
+                ov.hashtags && ov.hashtags.split(' ').filter(Boolean).map(h => h.startsWith('#') ? h : `#${h}`).join(' '),
+                ov.link
+              ].filter(Boolean).join('\n\n');
+              
+              const isOverridden = overrides[id]?.enabled;
+
+              return (
+                <div key={id} className="card" style={{ border: isOverridden ? '2px solid var(--color-success-400)' : '1px solid var(--border-primary)' }}>
+                  <div className="card-header" style={{ padding: '12px 16px', background: isOverridden ? 'var(--color-success-50)' : 'transparent', borderBottom: '1px solid var(--border-primary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: PLATFORM_COLORS[acc.platform], fontWeight: 700, fontSize: 'var(--font-size-sm)' }}>
+                        <PlatformIcon platform={acc.platform} size={16} /> {acc.account_name}
+                      </div>
+                      {isOverridden && (
+                        <span style={{ fontSize: '11px', background: 'var(--color-success-500)', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Custom</span>
+                      )}
+                    </div>
+                    {!ov.publishNow && ov.scheduledAt && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        📅 Scheduled for {new Date(ov.scheduledAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="card-body" style={{ display: 'flex', justifyContent: 'center', padding: '16px', background: 'var(--bg-secondary)' }}>
+                    <PlatformPreview platform={acc.platform} account={acc} content={fullText} media={mediaPreview} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

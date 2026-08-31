@@ -23,6 +23,7 @@ class SocialAccount extends Model
         'scopes',
         'connected_at',
         'expires_at',
+        'deleted_at',
     ];
 
     protected $casts = [

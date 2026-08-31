@@ -92,7 +92,7 @@ export default function Dashboard() {
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg>, label: 'Published Posts', value: posts.filter(p => p.status === 'published').length, trend: '12.5%', trendUp: true, color: '#10b981' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>, label: 'Failed Posts', value: posts.filter(p => p.status === 'failed').length, color: '#ef4444' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v4m0 0h10M9 7v10a2 2 0 002 2h6a2 2 0 002-2V7M9 7H5a2 2 0 00-2 2v10a2 2 0 002 2h4"/></svg>, label: 'Active Campaigns', value: MOCK_CAMPAIGNS.filter(c => c.status === 'active').length, trend: '2 new', trendUp: true, color: '#f59e0b' },
-    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>, label: 'Total Ad Spend', value: `$${MOCK_ANALYTICS.advertising.total_spend.toLocaleString()}`, trend: '8.3%', trendUp: false, color: '#6366f1' },
+
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>, label: 'Total Impressions', value: MOCK_ANALYTICS.organic.total_impressions.toLocaleString(), trend: '24.1%', trendUp: true, color: '#ec4899' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>, label: 'Avg. Engagement', value: `${MOCK_ANALYTICS.organic.engagement_rate}%`, trend: '0.5%', trendUp: true, color: '#f59e0b' },
   ]
@@ -120,7 +120,8 @@ export default function Dashboard() {
         <div style={{ position: 'absolute', width: 150, height: 150, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', bottom: -40, right: 20 }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2 style={{ color: 'white', fontSize: 'var(--font-size-2xl)', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0]}! 👋
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0]}
+
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 'var(--font-size-sm)', marginTop: 4 }}>
             You have {posts.filter(p => p.status === 'scheduled').length} posts scheduled and {MOCK_CAMPAIGNS.filter(c => c.status === 'active').length} campaigns running today.
@@ -252,45 +253,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Campaign Summary */}
-        <div className="card">
-          <div className="card-header">
-            <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Ad Campaigns</h3>
-            <Link to="/campaigns" style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-brand-600)', fontWeight: 600 }}>View all →</Link>
-          </div>
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 4 }}>
-            {/* Ad stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {[
-                { label: 'Total Spend', value: `$${MOCK_ANALYTICS.advertising.total_spend.toLocaleString()}` },
-                { label: 'Total Clicks', value: MOCK_ANALYTICS.advertising.total_clicks.toLocaleString() },
-                { label: 'Avg CTR', value: `${MOCK_ANALYTICS.advertising.avg_ctr}%` },
-                { label: 'Conversions', value: MOCK_ANALYTICS.advertising.conversions },
-              ].map((m, i) => (
-                <div key={i} style={{ background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500 }}>{m.label}</div>
-                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 800, color: 'var(--text-primary)', marginTop: 2, letterSpacing: '-0.03em' }}>{m.value}</div>
-                </div>
-              ))}
-            </div>
 
-            <hr className="divider" style={{ margin: '4px 0' }} />
-
-            {/* Campaign list */}
-            {MOCK_CAMPAIGNS.map(c => (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/campaigns')}>
-                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: `${PLATFORM_COLORS[c.platform]}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <PlatformIcon platform={c.platform} size={15} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>${c.spend.toFixed(0)} / ${c.budget} budget</div>
-                </div>
-                <StatusBadge status={c.status} />
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </DashboardLayout>
   )

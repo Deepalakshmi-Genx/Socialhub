@@ -18,6 +18,7 @@ export default function PostsList() {
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
+  const [viewPost, setViewPost] = useState(null)
 
   const tabs = [
     { value: 'all', label: 'All Posts', count: posts.length },
@@ -29,8 +30,8 @@ export default function PostsList() {
 
   const filtered = posts.filter(p => {
     const matchTab = activeTab === 'all' || p.status === activeTab
-    const matchSearch = p.content.toLowerCase().includes(search.toLowerCase()) || p.account_name.toLowerCase().includes(search.toLowerCase())
-    const matchPlatform = platformFilter === 'all' || p.platform === platformFilter
+    const matchSearch = p.content?.toLowerCase().includes(search.toLowerCase()) || p.social_account?.account_name?.toLowerCase().includes(search.toLowerCase())
+    const matchPlatform = platformFilter === 'all' || p.social_account?.platform === platformFilter
     return matchTab && matchSearch && matchPlatform
   })
 
@@ -47,9 +48,17 @@ export default function PostsList() {
   const handleRetry = async (post) => {
     toast.loading('Retrying post...', { id: 'retry' })
     try {
-      await axios.post(`/api/posts/${post.id}/retry`)
-      fetchPosts()
-      toast.success('Post published!', { id: 'retry' })
+      const res = await axios.post(`/api/posts/${post.id}/retry`)
+      if (res.data.success) {
+        if (res.data.post && res.data.post.status === 'failed') {
+          toast.error('Post failed to publish again.', { id: 'retry' })
+        } else {
+          toast.success('Post published!', { id: 'retry' })
+        }
+        fetchPosts()
+      } else {
+        toast.error('Failed to retry post.', { id: 'retry' })
+      }
     } catch(err) {
       toast.error('Failed to retry post.', { id: 'retry' })
     }
@@ -106,19 +115,19 @@ export default function PostsList() {
                 {/* Platform icon */}
                 <div style={{
                   width: 40, height: 40, borderRadius: 'var(--radius-lg)',
-                  background: `${PLATFORM_COLORS[post.platform]}18`,
+                  background: `${PLATFORM_COLORS[post.social_account?.platform]}18`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
-                  <PlatformIcon platform={post.platform} size={20} />
+                  <PlatformIcon platform={post.social_account?.platform} size={20} />
                 </div>
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{post.account_name}</span>
+                    <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{post.social_account?.account_name}</span>
                     <StatusBadge status={post.status} />
                     <span style={{ padding: '2px 8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)', fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>
-                      {post.platform}
+                      {post.social_account?.platform}
                     </span>
                   </div>
                   <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -156,11 +165,12 @@ export default function PostsList() {
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <Button variant="ghost" size="sm" onClick={() => setViewPost(post)}>View</Button>
                   {post.status === 'failed' && (
                     <Button variant="secondary" size="sm" onClick={() => handleRetry(post)}>Retry</Button>
                   )}
                   {(post.status === 'draft' || post.status === 'scheduled') && (
-                    <Button variant="secondary" size="sm" onClick={() => navigate('/posts/create')}>Edit</Button>
+                    <Button variant="secondary" size="sm" onClick={() => navigate(`/posts/edit/${post.id}`)}>Edit</Button>
                   )}
                   {post.status === 'scheduled' && (
                     <Button variant="ghost" size="sm" onClick={() => { setPosts(p => p.map(x => x.id === post.id ? { ...x, status: 'cancelled' } : x)); toast.success('Post cancelled.') }}>Cancel</Button>
@@ -181,6 +191,55 @@ export default function PostsList() {
           ))
         )}
       </div>
+
+      {/* View Post Modal */}
+      {viewPost && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="card animate-scale-in" style={{ width: '100%', maxWidth: 500, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', background: `${PLATFORM_COLORS[viewPost.social_account?.platform]}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <PlatformIcon platform={viewPost.social_account?.platform} size={16} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>{viewPost.social_account?.account_name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'capitalize' }}>{viewPost.status}</div>
+                </div>
+              </div>
+              <button onClick={() => setViewPost(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            
+            <div style={{ padding: 20, overflowY: 'auto' }}>
+              <p style={{ whiteSpace: 'pre-wrap', fontSize: 'var(--font-size-sm)', lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: 16 }}>
+                {viewPost.content}
+              </p>
+              
+              {viewPost.media_path && (
+                <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-secondary)', background: 'var(--bg-tertiary)' }}>
+                  {viewPost.post_type === 'video' ? (
+                    <video src={viewPost.media_path} controls style={{ width: '100%', display: 'block', maxHeight: 300, objectFit: 'contain' }} />
+                  ) : (
+                    <img src={viewPost.media_path} alt="Post media" style={{ width: '100%', display: 'block', maxHeight: 300, objectFit: 'contain' }} />
+                  )}
+                </div>
+              )}
+
+              {viewPost.link && (
+                <a href={viewPost.link} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 'var(--font-size-sm)', color: 'var(--color-primary-600)', textDecoration: 'none' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  {viewPost.link}
+                </a>
+              )}
+            </div>
+            
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-secondary)', background: 'var(--bg-secondary)', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => setViewPost(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }
