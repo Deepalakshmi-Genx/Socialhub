@@ -272,7 +272,7 @@ function AccountCard({ account, onDisconnect, onReconnect, onSettingsClick }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isExpired ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-xs)', fontWeight: 600, background: 'var(--color-warning-50)', color: 'var(--color-warning-600)' }}>
-                ⚠️ Expired
+                Expired
               </span>
             ) : (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 'var(--radius-full)', fontSize: 'var(--font-size-xs)', fontWeight: 600, background: 'var(--color-success-50)', color: 'var(--color-success-600)' }}>
@@ -306,7 +306,6 @@ function AccountCard({ account, onDisconnect, onReconnect, onSettingsClick }) {
 
         {isExpired && (
           <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--color-warning-50)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--font-size-xs)', color: 'var(--color-warning-600)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>⚠️</span>
             <span>Your {info.name} connection has expired. Reconnect to continue publishing.</span>
           </div>
         )}
@@ -341,28 +340,38 @@ function ConnectModal({ isOpen, onClose }) {
     }
 
     setConnecting(platform)
+
     if (platform === 'facebook_page' || platform === 'facebook_group' || platform === 'instagram') {
       const type = platform === 'facebook_group' ? 'group' : 'page'
       axios.get(`/api/social/meta/url?type=${type}&target=${platform}`)
         .then(res => {
-          if (res.data.url) {
+          if (res.data?.url) {
             window.location.href = res.data.url
+          } else {
+            toast.error('Could not generate Meta login URL')
+            setConnecting(null)
+            setShowFbOptions(false)
           }
         })
         .catch(err => {
-          toast.error('Failed to initialize Meta login')
+          console.error('Meta connect error:', err)
+          toast.error(err.response?.data?.message || 'Failed to initialize Meta login. Check network & Meta API credentials.')
           setConnecting(null)
           setShowFbOptions(false)
         })
     } else if (platform === 'linkedin') {
       axios.get(`/api/social/oauth/linkedin`)
         .then(res => {
-          if (res.data.url) {
+          if (res.data?.url) {
             window.location.href = res.data.url
+          } else {
+            toast.error('Could not generate LinkedIn login URL')
+            setConnecting(null)
           }
         })
         .catch(err => {
-          toast.error('Failed to initialize LinkedIn login')
+          console.error('LinkedIn connect error:', err)
+          toast.error(err.response?.data?.message || 'Failed to initialize LinkedIn login')
           setConnecting(null)
         })
     } else {
@@ -400,7 +409,7 @@ function ConnectModal({ isOpen, onClose }) {
                 {connecting === 'facebook_page' ? (
                    <div style={{ width: 20, height: 20, border: '2px solid #1877f240', borderTop: '2px solid #1877f2', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                 ) : (
-                   <span style={{ fontSize: 20 }}>🏳️</span>
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                 )}
               </div>
               <div>
@@ -426,7 +435,7 @@ function ConnectModal({ isOpen, onClose }) {
                 {connecting === 'facebook_group' ? (
                    <div style={{ width: 20, height: 20, border: '2px solid #1877f240', borderTop: '2px solid #1877f2', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                 ) : (
-                   <span style={{ fontSize: 20 }}>👥</span>
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1877f2" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
                 )}
               </div>
               <div>
@@ -501,29 +510,32 @@ export default function ConnectedAccounts() {
     const errorMsg = searchParams.get('error')
     const metaKey = searchParams.get('select_meta')
 
+    if (metaKey || successMsg || errorMsg) {
+      // Clear URL params cleanly
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+
     if (metaKey) {
       setSelectMetaKey(metaKey)
-      setSearchParams(new URLSearchParams())
     } else if (successMsg === 'facebook_connected' || successMsg === 'meta_connected') {
       toast.success('Facebook account(s) successfully connected!')
-      setSearchParams(new URLSearchParams())
     } else if (errorMsg) {
       toast.error('Failed to connect account: ' + errorMsg)
-      setSearchParams(new URLSearchParams())
     }
 
     fetchAccounts()
-  }, [searchParams, setSearchParams])
+  }, [])
 
   const fetchAccounts = () => {
     setLoading(true)
     axios.get('/api/social/accounts')
       .then(res => {
-        if (res.data.success) setAccounts(res.data.accounts)
+        const accs = res.data?.accounts || (Array.isArray(res.data) ? res.data : (res.data?.data?.data || res.data?.data || []))
+        setAccounts(Array.isArray(accs) ? accs : [])
       })
       .catch(err => {
-        console.error(err)
-        toast.error('Failed to load connected accounts')
+        console.error('Failed to fetch accounts:', err)
+        setAccounts([])
       })
       .finally(() => setLoading(false))
   }

@@ -150,13 +150,12 @@ export default function Campaigns() {
       {/* Summary strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Campaigns', value: campaigns.length, icon: '📊', color: 'var(--color-brand-500)' },
-          { label: 'Total Spend', value: `$${totalSpend.toFixed(0)}`, icon: '💵', color: 'var(--color-success-500)' },
-          { label: 'Total Impressions', value: totalImpressions.toLocaleString(), icon: '👁', color: 'var(--color-info-500)' },
-          { label: 'Total Clicks', value: totalClicks.toLocaleString(), icon: '🖱', color: 'var(--color-warning-500)' },
+          { label: 'Total Campaigns', value: campaigns.length, color: 'var(--color-brand-500)' },
+          { label: 'Total Spend', value: `$${totalSpend.toFixed(0)}`, color: 'var(--color-success-500)' },
+          { label: 'Total Impressions', value: totalImpressions.toLocaleString(), color: 'var(--color-info-500)' },
+          { label: 'Total Clicks', value: totalClicks.toLocaleString(), color: 'var(--color-warning-500)' },
         ].map((s, i) => (
           <div key={i} className="stat-card" style={{ paddingTop: 16, paddingBottom: 16 }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>{s.icon}</div>
             <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>{s.value}</div>
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500, marginTop: 2 }}>{s.label}</div>
           </div>
@@ -182,7 +181,6 @@ export default function Campaigns() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="card" style={{ padding: '48px 32px', textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📢</div>
             <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No campaigns found</h3>
             <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-sm)', marginBottom: 24 }}>Create your first advertising campaign to reach more people.</p>
             <Button variant="primary" onClick={() => navigate('/campaigns/create')}>Create Campaign</Button>

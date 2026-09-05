@@ -36,10 +36,10 @@ export default function Settings() {
   }
 
   const sections = [
-    { id: 'profile', label: 'Profile', icon: '👤' },
-    { id: 'security', label: 'Security', icon: '🔒' },
-    { id: 'notifications', label: 'Notifications', icon: '🔔' },
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
+    { id: 'profile', label: 'Profile' },
+    { id: 'security', label: 'Security' },
+    { id: 'notifications', label: 'Notifications' },
+    { id: 'appearance', label: 'Appearance' },
   ]
 
   return (

@@ -50,11 +50,17 @@ export function Badge({ children, variant = 'neutral', className }) {
 export function Avatar({ src, name, size = 'md', className }) {
   const sizeClass = `avatar-${size}`
   if (src) {
-    return <img src={src} alt={name} className={clsx('avatar', sizeClass, className)} />
+    return <img src={src} alt={name || 'Avatar'} className={clsx('avatar', sizeClass, className)} />
   }
-  const initials = name
-    ? name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : '?'
+  const cleanName = (name && name.trim()) ? name : 'User'
+  const initials = cleanName
+    .split(' ')
+    .filter(Boolean)
+    .map(n => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U'
+
   const px = { xs: 24, sm: 32, md: 40, lg: 48, xl: 56, '2xl': 80 }[size] || 40
   return (
     <div
@@ -107,19 +113,20 @@ export function PlatformIcon({ platform, size = 20 }) {
 export function StatusBadge({ status }) {
   const icons = {
     published:  '✓',
-    scheduled:  '⏰',
-    draft:      '✏',
+    scheduled:  '•',
+    draft:      '•',
     failed:     '✕',
     publishing: '↑',
     cancelled:  '−',
-    active:     '▶',
+    active:     '•',
     paused:     '∥',
     completed:  '✓',
-    pending:    '⏳',
+    pending:    '•',
   }
+  const safeStatus = status || 'active'
   return (
-    <span className={`post-status ${status}`}>
-      {icons[status]} {status.charAt(0).toUpperCase() + status.slice(1)}
+    <span className={`post-status ${safeStatus}`}>
+      {icons[safeStatus] || '•'} {safeStatus.charAt(0).toUpperCase() + safeStatus.slice(1)}
     </span>
   )
 }

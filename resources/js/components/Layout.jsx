@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { useAuthStore, useThemeStore, useUIStore, MOCK_NOTIFICATIONS } from '../store'
+import { useAuthStore, useThemeStore, useUIStore, useNotificationsStore } from '../store'
 import { Avatar, IconButton, Badge } from './ui'
 
 // ─── Icons (inline SVG) ───────────────────────────────────────────────────────
@@ -51,16 +51,16 @@ export function Sidebar() {
   const { user } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
 
+  const displayName = user?.name || (user?.email ? user.email.split('@')[0] : 'User')
+
   return (
     <aside className={clsx('sidebar', sidebarCollapsed && 'collapsed')}>
       {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+        <div className="sidebar-logo-icon" style={{ overflow: 'hidden' }}>
+          <img src="/genx_logo.png" alt="GenX Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
-        <span className="sidebar-logo-text">SocialHub</span>
+        <span className="sidebar-logo-text">GenX SocialHub</span>
       </div>
 
       {/* Navigation */}
@@ -91,7 +91,7 @@ export function Sidebar() {
         ))}
 
         {/* Admin link */}
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || !user) && (
           <div>
             <div className="sidebar-section-label">Admin</div>
             <NavLink
@@ -126,9 +126,9 @@ export function Sidebar() {
         </button>
 
         <NavLink to="/settings" className="sidebar-user">
-          <Avatar name={user?.name} size="sm" />
+          <Avatar name={displayName} size="sm" />
           <div className="sidebar-user-info">
-            <div className="sidebar-user-name">{user?.name || 'User'}</div>
+            <div className="sidebar-user-name">{displayName}</div>
           </div>
         </NavLink>
       </div>
@@ -145,8 +145,12 @@ export function Topbar({ title, actions }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef()
   const notifRef = useRef()
+  const { notifications, fetchNotifications, fetched: notifsFetched } = useNotificationsStore()
+  const unread = notifications?.filter(n => !n.is_read)?.length || 0
 
-  const unread = MOCK_NOTIFICATIONS.filter(n => !n.is_read).length
+  useEffect(() => {
+    if (!notifsFetched) fetchNotifications()
+  }, [notifsFetched])
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -222,9 +226,9 @@ export function Topbar({ title, actions }) {
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            <Avatar name={user?.name} size="sm" />
+            <Avatar name={user?.name || user?.email || 'User'} size="sm" />
             <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {user?.name?.split(' ')[0] || 'User'}
+              {(user?.name || user?.email || 'User').split(' ')[0]}
             </span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M6 9l6 6 6-6"/>
@@ -236,11 +240,12 @@ export function Topbar({ title, actions }) {
               <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setUserMenuOpen(false)} />
               <div className="dropdown-menu" style={{ right: 0, top: 'calc(100% + 4px)', zIndex: 1000, minWidth: 200 }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-primary)' }}>
-                  <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{user?.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>{user?.email}</div>
+                  <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>{user?.name || 'User'}</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>{user?.email || ''}</div>
                 </div>
                 {[
                   { label: 'Profile & Settings', to: '/settings' },
+                  { label: 'Admin Panel', to: '/admin' },
                 ].map(item => (
                   <button
                     key={item.to}
@@ -270,6 +275,7 @@ export function Topbar({ title, actions }) {
 
 // ─── NotificationPanel ────────────────────────────────────────────────────────
 function NotificationPanel() {
+  const { notifications, markAsRead, markAllAsRead } = useNotificationsStore()
   const typeColors = {
     success: 'var(--color-success-500)',
     error: 'var(--color-error-500)',
@@ -280,12 +286,16 @@ function NotificationPanel() {
     <div className="notification-panel">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-primary)', position: 'sticky', top: 0, background: 'var(--bg-card)' }}>
         <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>Notifications</span>
-        <button style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-brand-600)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>
+        <button onClick={markAllAsRead} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-brand-600)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>
           Mark all read
         </button>
       </div>
-      {MOCK_NOTIFICATIONS.map(notif => (
-        <div key={notif.id} className={clsx('notification-item', !notif.is_read && 'unread')}>
+      {(!notifications || notifications.length === 0) ? (
+        <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <p style={{ margin: 0, fontSize: 14 }}>No notifications</p>
+        </div>
+      ) : notifications.map(notif => (
+        <div key={notif.id} onClick={() => markAsRead(notif.id)} className={clsx('notification-item', !notif.is_read && 'unread')}>
           <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-lg)', background: `${typeColors[notif.type]}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={typeColors[notif.type]} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               {notif.type === 'success' && <path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/>}

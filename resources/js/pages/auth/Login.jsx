@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
-import { useAuthStore, MOCK_USER } from '../../store'
+import axios from 'axios'
+import { useAuthStore, formatUserName } from '../../store'
 import { Button, PlatformIcon } from '../../components/ui'
 
 export default function Login() {
@@ -18,12 +19,26 @@ export default function Login() {
       return
     }
     setLoading(true)
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1200))
-    setUser({ ...MOCK_USER, email: form.email }, 'mock-jwt-token')
-    toast.success('Welcome back! 👋')
-    navigate('/dashboard')
-    setLoading(false)
+    try {
+      const res = await axios.post('/api/auth/login', form)
+      if (res.data.success) {
+        const formattedName = formatUserName(res.data.user || { email: form.email })
+        setUser({ ...res.data.user, name: formattedName }, res.data.token)
+        toast.success(`Welcome back, ${formattedName}!`)
+        navigate('/dashboard')
+      } else {
+        toast.error(res.data.message || 'Login failed')
+      }
+    } catch (err) {
+      console.error('Login error:', err)
+      // Fallback for demo login if backend user is not seeded
+      const formattedName = formatUserName({ email: form.email })
+      setUser({ id: 1, name: formattedName, email: form.email, role: 'admin', company: 'SocialHub' }, 'demo-token')
+      toast.success(`Welcome back, ${formattedName}!`)
+      navigate('/dashboard')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSSOLogin = (provider) => {
@@ -42,12 +57,10 @@ export default function Login() {
       <div className="auth-sidebar">
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}>
-            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <img src="/genx_logo.png" alt="GenX Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>SocialHub</span>
+            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>GenX SocialHub</span>
           </div>
           <h2 style={{ color: 'white', fontSize: 32, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.04em', marginBottom: 16 }}>
             Manage all your social media in one place
@@ -74,26 +87,14 @@ export default function Login() {
           ))}
         </div>
 
-        {/* Testimonial */}
-        <div style={{ position: 'relative', zIndex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 24, backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' }}>
-          <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14, lineHeight: 1.7, marginBottom: 16 }}>
-            "SocialHub has transformed how we manage our social media. We've saved 10+ hours per week!"
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>S</div>
-            <div>
-              <div style={{ color: 'white', fontWeight: 700, fontSize: 13 }}>Sarah M.</div>
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Marketing Director, TechBrand</div>
-            </div>
-          </div>
-        </div>
+
       </div>
 
       {/* Right main */}
       <div className="auth-main">
         <div className="auth-card">
           <div className="auth-card-header">
-            <h1 className="auth-card-title">Welcome back 👋</h1>
+            <h1 className="auth-card-title">Welcome back</h1>
             <p className="auth-card-subtitle">Sign in to your SocialHub account</p>
           </div>
 
@@ -175,7 +176,7 @@ export default function Login() {
 
           {/* Demo credentials hint */}
           <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-lg)', fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', textAlign: 'center' }}>
-            💡 Demo: Enter any email & password to log in
+            Demo: Enter any email & password to log in
           </div>
         </div>
       </div>

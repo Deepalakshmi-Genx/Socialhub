@@ -75,8 +75,8 @@ export default function App() {
       {/* 404 */}
       <Route path="*" element={
         <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: 'var(--bg-secondary)' }}>
-          <div style={{ fontSize: 72 }}>🔍</div>
-          <h1 style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>404 — Page Not Found</h1>
+          <div style={{ fontSize: 48, fontWeight: 800, color: 'var(--text-tertiary)' }}>404</div>
+          <h1 style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>Page Not Found</h1>
           <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--font-size-md)' }}>The page you're looking for doesn't exist.</p>
           <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, var(--color-brand-500), var(--color-brand-700))', color: 'white', padding: '10px 24px', borderRadius: 10, fontWeight: 700, fontSize: 14, textDecoration: 'none', marginTop: 8 }}>
             ← Back to Dashboard

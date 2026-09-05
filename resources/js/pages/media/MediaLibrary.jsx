@@ -1,18 +1,21 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { DashboardLayout } from '../../components/Layout'
 import { Button } from '../../components/ui'
 import { toast } from 'react-hot-toast'
-
-const MOCK_MEDIA = []
+import { useMediaStore } from '../../store'
 
 export default function MediaLibrary() {
   const fileInputRef = useRef()
-  const [media, setMedia] = useState(MOCK_MEDIA)
+  const { media, fetchMedia, fetched } = useMediaStore()
   const [selected, setSelected] = useState([])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [uploading, setUploading] = useState(false)
   const [previewItem, setPreviewItem] = useState(null)
+
+  useEffect(() => {
+    if (!fetched) fetchMedia()
+  }, [fetched])
 
   const filtered = media.filter(m => {
     const matchSearch = m.name.toLowerCase().includes(search.toLowerCase())
@@ -141,7 +144,7 @@ export default function MediaLibrary() {
               className={`tab-btn ${typeFilter === t ? 'active' : ''}`}
               style={{ padding: '6px 14px', borderRadius: 8 }}
             >
-              {t === 'all' ? 'All' : t === 'image' ? '🖼 Images' : '🎬 Videos'}
+              {t === 'all' ? 'All' : t === 'image' ? 'Images' : 'Videos'}
             </button>
           ))}
         </div>

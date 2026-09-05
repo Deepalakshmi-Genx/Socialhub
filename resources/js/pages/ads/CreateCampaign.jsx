@@ -9,12 +9,12 @@ import { Button, PlatformIcon, StepWizard } from '../../components/ui'
 const STEPS = ['Platform', 'Campaign', 'Audience', 'Budget', 'Creative', 'Review']
 
 const OBJECTIVES = [
-  { key: 'awareness', icon: '👁', label: 'Brand Awareness', desc: 'Reach people more likely to remember your ad' },
-  { key: 'traffic', icon: '🔗', label: 'Traffic', desc: 'Send people to a destination on or off Facebook' },
-  { key: 'engagement', icon: '❤️', label: 'Engagement', desc: 'Get more post reactions, comments, and shares' },
-  { key: 'leads', icon: '📋', label: 'Lead Generation', desc: 'Collect leads for your business directly from ads' },
-  { key: 'app_installs', icon: '📱', label: 'App Installs', desc: 'Send people to the store to purchase your app' },
-  { key: 'conversions', icon: '🎯', label: 'Conversions', desc: 'Get people to take valuable actions on your site' },
+  { key: 'awareness', label: 'Brand Awareness', desc: 'Reach people more likely to remember your ad' },
+  { key: 'traffic', label: 'Traffic', desc: 'Send people to a destination on or off Facebook' },
+  { key: 'engagement', label: 'Engagement', desc: 'Get more post reactions, comments, and shares' },
+  { key: 'leads', label: 'Lead Generation', desc: 'Collect leads for your business directly from ads' },
+  { key: 'app_installs', label: 'App Installs', desc: 'Send people to the store to purchase your app' },
+  { key: 'conversions', label: 'Conversions', desc: 'Get people to take valuable actions on your site' },
 ]
 
 const INTERESTS = ['Technology', 'Business', 'Marketing', 'Fashion', 'Travel', 'Food', 'Fitness', 'Gaming', 'Finance', 'Education', 'Parenting', 'Sports', 'Photography', 'Art', 'Music']
@@ -262,7 +262,7 @@ export default function CreateCampaign() {
       {step === 3 && (
         <StepPanel title="Set Budget & Schedule" subtitle="Control how much you spend and when">
           <div style={{ display: 'flex', gap: 12 }}>
-            {[{ value: 'daily', label: 'Daily Budget', icon: '📅', desc: 'Average amount per day' }, { value: 'lifetime', label: 'Lifetime Budget', icon: '📆', desc: 'Total amount for campaign' }].map(opt => (
+            {[{ value: 'daily', label: 'Daily Budget', desc: 'Average amount per day' }, { value: 'lifetime', label: 'Lifetime Budget', desc: 'Total amount for campaign' }].map(opt => (
               <button
                 key={opt.value}
                 onClick={() => update('budgetType', opt.value)}
@@ -272,7 +272,6 @@ export default function CreateCampaign() {
                   cursor: 'pointer', textAlign: 'center', fontFamily: 'inherit', transition: 'all var(--transition-fast)',
                 }}
               >
-                <div style={{ fontSize: 24, marginBottom: 6 }}>{opt.icon}</div>
                 <div style={{ fontWeight: 700, fontSize: 'var(--font-size-sm)', color: campaign.budgetType === opt.value ? 'var(--color-brand-600)' : 'var(--text-primary)' }}>{opt.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{opt.desc}</div>
               </button>
@@ -400,7 +399,7 @@ export default function CreateCampaign() {
           </Button>
         ) : (
           <Button variant="success" loading={submitting} onClick={handleSubmit}>
-            🚀 Submit Campaign
+            Submit Campaign
           </Button>
         )}
       </div>

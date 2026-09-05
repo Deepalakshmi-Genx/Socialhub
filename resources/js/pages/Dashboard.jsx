@@ -3,8 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { DashboardLayout } from '../components/Layout'
 import { Button, Avatar, Badge, StatusBadge, PlatformIcon } from '../components/ui'
 import {
-  MOCK_CAMPAIGNS, MOCK_ANALYTICS,
-  useAuthStore, useSocialAccountsStore, usePostsStore
+  useAuthStore, useSocialAccountsStore, usePostsStore, useCampaignsStore, useAnalyticsStore
 } from '../store'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
@@ -80,21 +79,25 @@ export default function Dashboard() {
 
   const { accounts, fetchAccounts, fetched: accountsFetched } = useSocialAccountsStore()
   const { posts, fetchPosts, fetched: postsFetched } = usePostsStore()
+  const { campaigns, fetchCampaigns, fetched: campaignsFetched } = useCampaignsStore()
+  const { analytics, fetchAnalytics, fetched: analyticsFetched } = useAnalyticsStore()
 
   useEffect(() => {
     if (!accountsFetched) fetchAccounts()
     if (!postsFetched) fetchPosts()
-  }, [accountsFetched, postsFetched, fetchAccounts, fetchPosts])
+    if (!campaignsFetched) fetchCampaigns()
+    if (!analyticsFetched) fetchAnalytics()
+  }, [accountsFetched, postsFetched, campaignsFetched, analyticsFetched, fetchAccounts, fetchPosts, fetchCampaigns, fetchAnalytics])
 
   const stats = [
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, label: 'Connected Accounts', value: accounts.length, trend: '1 new', trendUp: true, color: '#7c5cfc' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>, label: 'Scheduled Posts', value: posts.filter(p => p.status === 'scheduled').length, trend: '3 this week', trendUp: true, color: '#3b82f6' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14M22 4L12 14.01l-3-3"/></svg>, label: 'Published Posts', value: posts.filter(p => p.status === 'published').length, trend: '12.5%', trendUp: true, color: '#10b981' },
     { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>, label: 'Failed Posts', value: posts.filter(p => p.status === 'failed').length, color: '#ef4444' },
-    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v4m0 0h10M9 7v10a2 2 0 002 2h6a2 2 0 002-2V7M9 7H5a2 2 0 00-2 2v10a2 2 0 002 2h4"/></svg>, label: 'Active Campaigns', value: MOCK_CAMPAIGNS.filter(c => c.status === 'active').length, trend: '2 new', trendUp: true, color: '#f59e0b' },
-
-    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>, label: 'Total Impressions', value: MOCK_ANALYTICS.organic.total_impressions.toLocaleString(), trend: '24.1%', trendUp: true, color: '#ec4899' },
-    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>, label: 'Avg. Engagement', value: `${MOCK_ANALYTICS.organic.engagement_rate}%`, trend: '0.5%', trendUp: true, color: '#f59e0b' },
+    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v4m0 0h10M9 7v10a2 2 0 002 2h6a2 2 0 002-2V7M9 7H5a2 2 0 00-2 2v10a2 2 0 002 2h4"/></svg>, label: 'Active Campaigns', value: campaigns?.filter(c => c.status === 'active')?.length || 0, trend: '0 new', trendUp: true, color: '#f59e0b' },
+    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>, label: 'Total Followers', value: accounts.reduce((acc, a) => acc + (a.followers || 0), 0).toLocaleString(), trend: '0%', trendUp: true, color: '#10b981' },
+    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>, label: 'Total Impressions', value: (analytics?.organic?.total_impressions || 0).toLocaleString(), trend: '0%', trendUp: true, color: '#ec4899' },
+    { icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>, label: 'Avg. Engagement', value: `${analytics?.organic?.engagement_rate || 0}%`, trend: '0%', trendUp: true, color: '#f59e0b' },
   ]
 
   const recentPosts = posts.slice(0, 5)
@@ -120,11 +123,10 @@ export default function Dashboard() {
         <div style={{ position: 'absolute', width: 150, height: 150, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', bottom: -40, right: 20 }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2 style={{ color: 'white', fontSize: 'var(--font-size-2xl)', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name?.split(' ')[0]}
-
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {(user?.name || user?.email?.split('@')[0] || 'User').split(' ')[0]}
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 'var(--font-size-sm)', marginTop: 4 }}>
-            You have {posts.filter(p => p.status === 'scheduled').length} posts scheduled and {MOCK_CAMPAIGNS.filter(c => c.status === 'active').length} campaigns running today.
+          <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'var(--font-size-sm)', marginTop: 4 }}>
+            You have <strong>{posts.filter(p => p.status === 'scheduled').length}</strong> posts scheduled and <strong>{campaigns?.filter(c => c.status === 'active')?.length || 0}</strong> campaigns running today.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 12, position: 'relative', zIndex: 1 }}>
@@ -163,7 +165,7 @@ export default function Dashboard() {
           </div>
           <div className="card-body" style={{ paddingTop: 8 }}>
             <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={MOCK_ANALYTICS.chart_data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+              <AreaChart data={analytics?.chart_data || []} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <defs>
                   <linearGradient id="impressGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#7c5cfc" stopOpacity={0.3}/>
@@ -221,12 +223,12 @@ export default function Dashboard() {
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 onClick={() => navigate('/posts')}
               >
-                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-lg)', background: `${PLATFORM_COLORS[post.platform]}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  <PlatformIcon platform={post.platform} size={16} />
+                <div style={{ width: 32, height: 32, borderRadius: 'var(--radius-lg)', background: `${PLATFORM_COLORS[post.social_account?.platform || 'facebook']}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                  <PlatformIcon platform={post.social_account?.platform} size={16} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--text-secondary)' }}>{post.account_name}</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--text-secondary)' }}>{post.social_account?.account_name || 'Unknown Account'}</span>
                     <StatusBadge status={post.status} />
                   </div>
                   <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
@@ -234,17 +236,19 @@ export default function Dashboard() {
                   </p>
                   {post.status === 'published' && (
                     <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
-                      {[['❤️', post.likes], ['💬', post.comments], ['🔁', post.shares]].map(([emoji, val], j) => (
-                        <span key={j} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500 }}>{emoji} {val}</span>
+                      {[['Likes:', post.likes], ['Comments:', post.comments], ['Shares:', post.shares]]
+                        .filter(([label]) => !(label === 'Shares:' && post.social_account?.platform === 'instagram'))
+                        .map(([label, val], j) => (
+                        <span key={j} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500 }}>{label} {val}</span>
                       ))}
                     </div>
                   )}
                   {post.status === 'failed' && (
-                    <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-500)', marginTop: 4 }}>⚠️ {post.error}</p>
+                    <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-500)', marginTop: 4 }}>Error: {post.error}</p>
                   )}
                   {(post.scheduled_at || post.published_at) && (
                     <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>
-                      {post.scheduled_at ? `📅 Scheduled: ${post.scheduled_at}` : `✓ Published: ${post.published_at}`}
+                      {post.scheduled_at ? `Scheduled: ${post.scheduled_at}` : `Published: ${post.published_at}`}
                     </p>
                   )}
                 </div>

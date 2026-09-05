@@ -197,7 +197,7 @@ export default function Calendar() {
                         style={{ display: 'flex' }}
                         onClick={() => setSelectedPost(postForSlot)}
                       >
-                        <PlatformIcon platform={postForSlot.platform} size={10} />
+                        <PlatformIcon platform={postForSlot.social_account?.platform} size={10} />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 10 }}>
                           {postForSlot.content.slice(0, 18)}...
                         </span>
@@ -224,11 +224,11 @@ export default function Calendar() {
               </div>
               <div style={{ flex: 1 }}>
                 <div className={`calendar-post-chip ${post.status}`} style={{ display: 'inline-flex', marginBottom: 6 }}>
-                  <PlatformIcon platform={post.platform} size={12} />
+                  <PlatformIcon platform={post.social_account?.platform} size={12} />
                   {post.status}
                 </div>
                 <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)', lineHeight: 1.5 }}>{post.content.slice(0, 100)}...</p>
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{post.account_name}</p>
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{post.social_account?.account_name}</p>
               </div>
             </div>
           ))}
@@ -244,8 +244,8 @@ export default function Calendar() {
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-2xl)', padding: 24, maxWidth: 480, width: '100%', animation: 'bounceIn 200ms ease both' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <PlatformIcon platform={selectedPost.platform} size={22} />
-                <span style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', color: 'var(--text-primary)' }}>{selectedPost.account_name}</span>
+                <PlatformIcon platform={selectedPost.social_account?.platform} size={22} />
+                <span style={{ fontWeight: 700, fontSize: 'var(--font-size-md)', color: 'var(--text-primary)' }}>{selectedPost.social_account?.account_name}</span>
               </div>
               <button onClick={() => setSelectedPost(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 20 }}>×</button>
             </div>
@@ -253,12 +253,14 @@ export default function Calendar() {
             <div style={{ display: 'flex', gap: 8 }}>
               <span className={`post-status ${selectedPost.status}`}>{selectedPost.status}</span>
               {selectedPost.published_at && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', alignSelf: 'center' }}>{selectedPost.published_at}</span>}
-              {selectedPost.scheduled_at && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-info-600)', alignSelf: 'center' }}>📅 {selectedPost.scheduled_at}</span>}
+              {selectedPost.scheduled_at && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-info-600)', alignSelf: 'center' }}>Scheduled: {selectedPost.scheduled_at}</span>}
             </div>
             {selectedPost.status === 'published' && (
               <div style={{ display: 'flex', gap: 20, marginTop: 16 }}>
-                {[['❤️', selectedPost.likes], ['💬', selectedPost.comments], ['🔁', selectedPost.shares]].map(([e, v], j) => (
-                  <span key={j} style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>{e} {v}</span>
+                {[['Likes:', selectedPost.likes], ['Comments:', selectedPost.comments], ['Shares:', selectedPost.shares]]
+                  .filter(([label]) => !(label === 'Shares:' && selectedPost.social_account?.platform === 'instagram'))
+                  .map(([label, val], j) => (
+                  <span key={j} style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>{label} {val}</span>
                 ))}
               </div>
             )}

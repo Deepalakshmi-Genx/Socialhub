@@ -36,12 +36,10 @@ export default function ForgotPassword() {
       <div className="auth-sidebar">
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <img src="/genx_logo.png" alt="GenX Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>SocialHub</span>
+            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>GenX SocialHub</span>
           </div>
           <h2 style={{ color: 'white', fontSize: 30, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.04em', marginTop: 48 }}>
             Don&apos;t worry, we&apos;ve got you covered
@@ -106,7 +104,9 @@ export default function ForgotPassword() {
           {step === 2 && (
             <>
               <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                <div style={{ fontSize: 56, marginBottom: 16 }}>📨</div>
+                <div style={{ width: 72, height: 72, background: 'var(--color-brand-50)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-brand-600)" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
                 <h1 className="auth-card-title">Check your inbox</h1>
                 <p className="auth-card-subtitle" style={{ marginTop: 8 }}>
                   We sent a reset link to <strong>{email}</strong>

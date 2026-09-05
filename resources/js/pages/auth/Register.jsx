@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
-import { useAuthStore, MOCK_USER } from '../../store'
+import axios from 'axios'
+import { useAuthStore } from '../../store'
 import { Button, PlatformIcon } from '../../components/ui'
 
 export default function Register() {
@@ -32,17 +33,35 @@ export default function Register() {
     e.preventDefault()
     if (!validate()) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1400))
-    setStep(2)
-    setLoading(false)
+    try {
+      const res = await axios.post('/api/auth/register', {
+        name: form.name,
+        email: form.email,
+        mobile: form.mobile,
+        company: form.company,
+        password: form.password,
+        password_confirmation: form.confirmPassword,
+        terms: form.terms
+      })
+      if (res.data.success) {
+        setStep(2)
+      } else {
+        toast.error(res.data.message || 'Registration failed')
+      }
+    } catch (err) {
+      console.error('Registration error:', err)
+      const errorMsg = err.response?.data?.message || err.response?.data?.errors?.email?.[0] || 'Registration failed. Check your details.'
+      toast.error(errorMsg)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleVerify = async () => {
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setUser({ ...MOCK_USER, name: form.name, email: form.email, company: form.company }, 'mock-token')
-    toast.success('Account created! Welcome to SocialHub 🎉')
-    navigate('/dashboard')
+  const handleVerify = () => {
+    // Usually, verification is done via a link sent to email.
+    // For local testing, we can just redirect to login so they can log in if they manually verified or don't require verification locally.
+    toast.success('Please check your email for the verification link.')
+    navigate('/login')
   }
 
   const F = ({ id, label, type = 'text', placeholder, hint }) => (
@@ -70,7 +89,7 @@ export default function Register() {
         <div className="auth-main">
           <div className="auth-card" style={{ textAlign: 'center' }}>
             <div style={{ width: 72, height: 72, background: 'var(--color-success-50)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: 32 }}>
-              ✉️
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-success-600)" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             </div>
             <h1 className="auth-card-title" style={{ textAlign: 'center' }}>Check your email</h1>
             <p className="auth-card-subtitle" style={{ textAlign: 'center', margin: '8px 0 32px' }}>
@@ -93,12 +112,10 @@ export default function Register() {
       <div className="auth-sidebar">
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}>
-            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <img src="/genx_logo.png" alt="GenX Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>SocialHub</span>
+            <span style={{ color: 'white', fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em' }}>GenX SocialHub</span>
           </div>
           <h2 style={{ color: 'white', fontSize: 30, fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.04em', marginBottom: 16 }}>
             Start managing your social media smarter
@@ -132,7 +149,7 @@ export default function Register() {
           </div>
 
           {/* Google SSO */}
-          <button className="sso-btn" onClick={() => toast.success('Google OAuth — configure credentials')} style={{ marginBottom: 20 }}>
+          <button type="button" className="sso-btn" onClick={() => window.location.href = '/api/auth/google'} style={{ marginBottom: 20 }}>
             <PlatformIcon platform="google" size={20} />
             Sign up with Google
           </button>

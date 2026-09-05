@@ -28,6 +28,7 @@ Route::prefix('auth')->group(function () {
 
 // ─── OAuth Callbacks (no auth required) ────────────────────────────────────
 Route::prefix('oauth')->group(function () {
+    Route::get('/facebook/callback', [SocialAccountController::class, 'oauthMetaCallback']);
     Route::get('/instagram', [SocialAccountController::class, 'oauthInstagram']);
     Route::get('/instagram/callback', [SocialAccountController::class, 'oauthInstagramCallback']);
     Route::get('/linkedin/callback', [SocialAccountController::class, 'oauthLinkedInCallback']);

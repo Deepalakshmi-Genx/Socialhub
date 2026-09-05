@@ -141,6 +141,7 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
+        \Log::info('Auth /me endpoint called by user ID: ' . optional($request->user())->id);
         return response()->json([
             'success' => true,
             'user'    => $request->user(),
@@ -236,12 +237,15 @@ class AuthController extends Controller
      */
     public function oauthGoogleCallback(Request $request)
     {
+        $frontendUrl = rtrim(env('FRONTEND_URL') ?: url('/'), '/');
         if ($request->has('error')) {
-            return redirect(env('FRONTEND_URL') . '/login?error=oauth_denied');
+            return redirect($frontendUrl . '/login?error=oauth_denied');
         }
 
         // Exchange code for token
-        $response = \Http::withoutVerifying()->post('https://oauth2.googleapis.com/token', [
+        // Note: withoutVerifying() is required on local dev (Windows SSL cert issue)
+        \Log::info('Google SSO: Attempting token exchange with code: ' . $request->code);
+        $response = \Illuminate\Support\Facades\Http::withoutVerifying()->post('https://oauth2.googleapis.com/token', [
             'code'          => $request->code,
             'client_id'     => env('GOOGLE_CLIENT_ID'),
             'client_secret' => env('GOOGLE_CLIENT_SECRET'),
@@ -250,13 +254,17 @@ class AuthController extends Controller
         ]);
 
         if (!$response->ok()) {
-            return redirect(env('FRONTEND_URL') . '/login?error=oauth_failed');
+            \Log::error('Google token exchange failed. Status: ' . $response->status() . ' Body: ' . $response->body());
+            return redirect($frontendUrl . '/login?error=oauth_failed');
         }
+
+        \Log::info('Google SSO: Token exchange successful');
+
 
         $tokenData = $response->json();
 
         // Get user info
-        $userInfo = \Http::withoutVerifying()->withToken($tokenData['access_token'])
+        $userInfo = \Illuminate\Support\Facades\Http::withoutVerifying()->withToken($tokenData['access_token'])
             ->get('https://www.googleapis.com/oauth2/v2/userinfo')
             ->json();
 
@@ -264,19 +272,28 @@ class AuthController extends Controller
         $user = User::firstOrCreate(
             ['email' => $userInfo['email']],
             [
-                'name'             => $userInfo['name'],
+                'name'             => $userInfo['name'] ?? 'Google User',
                 'email_verified_at'=> now(),
                 'status'           => 'active',
                 'password'         => Hash::make(Str::random(32)),
                 'sso_provider'     => 'google',
-                'sso_id'           => $userInfo['id'],
+                'sso_id'           => $userInfo['id'] ?? null,
                 'avatar'           => $userInfo['picture'] ?? null,
             ]
         );
 
-        $token = $user->createToken('socialhub-google-token')->plainTextToken;
+        // Ensure user is active upon SSO login
+        if ($user->status !== 'active') {
+            $user->update(['status' => 'active', 'email_verified_at' => $user->email_verified_at ?? now()]);
+        }
 
-        return redirect(env('FRONTEND_URL') . "/auth/sso?token={$token}");
+        $token = $user->createToken('socialhub-google-token')->plainTextToken;
+        $encodedToken = rawurlencode($token);
+        $name = rawurlencode($user->name ?? '');
+        $email = rawurlencode($user->email ?? '');
+        $avatar = rawurlencode($user->avatar ?? '');
+
+        return redirect($frontendUrl . "/auth/sso?token={$encodedToken}&id={$user->id}&name={$name}&email={$email}&avatar={$avatar}");
     }
 
     /**

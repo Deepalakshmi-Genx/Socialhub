@@ -97,7 +97,6 @@ export default function PostsList() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {filtered.length === 0 ? (
           <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
             <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No posts found</h3>
             <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-tertiary)', marginBottom: 24 }}>
               {search || platformFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first post to get started'}
@@ -150,14 +149,16 @@ export default function PostsList() {
                     )}
                     {post.status === 'published' && (
                       <div style={{ display: 'flex', gap: 14 }}>
-                        {[['❤️', post.likes], ['💬', post.comments], ['🔁', post.shares]].map(([e, v], j) => (
-                          <span key={j} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 600 }}>{e} {v}</span>
+                        {[['Likes:', post.likes], ['Comments:', post.comments], ['Shares:', post.shares]]
+                          .filter(([label]) => !(label === 'Shares:' && post.social_account?.platform === 'instagram'))
+                          .map(([label, val], j) => (
+                          <span key={j} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 600 }}>{label} {val}</span>
                         ))}
                       </div>
                     )}
                     {post.status === 'failed' && post.error && (
                       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-error-500)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        ⚠️ {post.error}
+                        Error: {post.error}
                       </span>
                     )}
                   </div>

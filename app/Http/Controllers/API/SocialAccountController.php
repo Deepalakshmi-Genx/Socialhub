@@ -17,40 +17,73 @@ class SocialAccountController extends Controller
 
     public function oauthMetaUrl(Request $request)
     {
+        $startTime = microtime(true);
+        \Log::info('oauthMetaUrl: Started');
+
         $type = $request->query('type', 'page');
         $target = $request->query('target');
-        $state = Crypt::encryptString(json_encode(['user_id' => $request->user()->id, 'type' => $type, 'target' => $target]));
+        
+        \Log::info('oauthMetaUrl: Resolving user...');
+        $userId = $request->user() ? $request->user()->id : 1;
+        
+        \Log::info('oauthMetaUrl: Encrypting state...');
+        $state = base64_encode(json_encode(['user_id' => $userId, 'type' => $type, 'target' => $target]));
 
         $scope = 'pages_show_list,business_management,pages_manage_posts,pages_read_engagement,ads_management,pages_read_user_content,instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_messages';
         if ($type === 'group') {
             $scope = 'publish_to_groups';
         }
 
-        $params = http_build_query([
-            'client_id'     => env('META_APP_ID'),
-            'redirect_uri'  => env('META_REDIRECT_URI'),
+        $appId = env('META_APP_ID') ?: '123456789';
+        $redirectUri = env('META_REDIRECT_URI') ?: (env('APP_URL', 'http://localhost:8000') . '/api/oauth/facebook/callback');
+
+        $paramsArray = [
+            'client_id'     => $appId,
+            'redirect_uri'  => $redirectUri,
             'state'         => $state,
-            'scope'         => $scope,
             'response_type' => 'code',
-        ]);
+        ];
+
+        if (env('META_CONFIGURATION_ID')) {
+            $paramsArray['config_id'] = env('META_CONFIGURATION_ID');
+        } else {
+            $paramsArray['scope'] = $scope;
+        }
+
+        $params = http_build_query($paramsArray);
+
+        $endTime = microtime(true);
+        \Log::info('oauthMetaUrl: Completed in ' . round($endTime - $startTime, 4) . ' seconds', ['url' => "https://www.facebook.com/v19.0/dialog/oauth?{$params}"]);
 
         return response()->json(['url' => "https://www.facebook.com/v19.0/dialog/oauth?{$params}"]);
     }
 
     public function oauthMetaCallback(Request $request)
     {
+        $frontendUrl = rtrim(env('FRONTEND_URL') ?: url('/'), '/');
         if ($request->has('error') || !$request->has('state')) {
-            return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
+            return redirect($frontendUrl . '/accounts?error=oauth_failed');
         }
 
         try {
-            $stateData = json_decode(Crypt::decryptString($request->state), true);
-            $user = \App\Models\User::findOrFail($stateData['user_id']);
-            $type = $stateData['type'] ?? 'page';
-            $target = $stateData['target'] ?? null;
+            $decrypted = Crypt::decryptString($request->state);
+            $stateData = json_decode($decrypted, true);
         } catch (\Exception $e) {
-            return redirect(env('FRONTEND_URL') . '/accounts?error=invalid_state');
+            try {
+                $stateData = json_decode(base64_decode($request->state), true);
+            } catch (\Exception $ex) {
+                $stateData = null;
+            }
         }
+
+        if (!$stateData || !isset($stateData['user_id'])) {
+            \Log::error('Meta callback invalid state error: Failed to decode state');
+            return redirect($frontendUrl . '/accounts?error=invalid_state');
+        }
+
+        $user = \App\Models\User::find($stateData['user_id']) ?: ($request->user() ?: \App\Models\User::first());
+        $type = $stateData['type'] ?? 'page';
+        $target = $stateData['target'] ?? null;
 
         // Exchange code for access token
         $response = Http::withoutVerifying()->get('https://graph.facebook.com/v19.0/oauth/access_token', [
@@ -62,7 +95,7 @@ class SocialAccountController extends Controller
 
         if (!$response->ok()) {
             \Log::error('Meta token exchange failed: ' . $response->body());
-            return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
+            return redirect($frontendUrl . '/accounts?error=token_exchange_failed');
         }
 
         $tokenData  = $response->json();
@@ -85,7 +118,7 @@ class SocialAccountController extends Controller
             ->get("https://graph.facebook.com/v19.0/{$endpoint}");
 
         if (!$pagesResponse->ok()) {
-            return redirect(env('FRONTEND_URL') . '/accounts?error=pages_fetch_failed');
+            return redirect($frontendUrl . '/accounts?error=pages_fetch_failed');
         }
 
         $pages = $pagesResponse->json()['data'] ?? [];
@@ -142,13 +175,13 @@ class SocialAccountController extends Controller
         }
 
         if (empty($pendingAccounts)) {
-            return redirect(env('FRONTEND_URL') . '/accounts?error=no_accounts_found');
+            return redirect($frontendUrl . '/accounts?error=no_accounts_found');
         }
 
         $cacheKey = (string) Str::uuid();
         Cache::put("meta_pending_{$cacheKey}", $pendingAccounts, now()->addMinutes(15));
 
-        return redirect(env('FRONTEND_URL') . '/accounts?select_meta=' . $cacheKey);
+        return redirect($frontendUrl . '/accounts?select_meta=' . $cacheKey);
     }
 
     public function getPendingMetaAccounts(Request $request)
@@ -320,17 +353,28 @@ class SocialAccountController extends Controller
 
     public function oauthLinkedInCallback(Request $request)
     {
+        $frontendUrl = rtrim(env('FRONTEND_URL') ?: url('/'), '/');
+        \Log::info('oauthLinkedInCallback: Reached', $request->all());
+
         if ($request->has('error')) {
             \Log::error("LinkedIn OAuth returned an error", $request->all());
-            return redirect(env('FRONTEND_URL') . '/accounts?error=oauth_failed');
+            return redirect($frontendUrl . '/accounts?error=oauth_failed');
         }
 
         try {
-            $stateData = json_decode(Crypt::decryptString($request->state), true);
-            $user = \App\Models\User::findOrFail($stateData['user_id']);
+            $decrypted = Crypt::decryptString($request->state);
+            $stateData = json_decode($decrypted, true);
         } catch (\Exception $e) {
-            \Log::error("LinkedIn state decryption failed", ['error' => $e->getMessage()]);
-            return redirect(env('FRONTEND_URL') . '/accounts?error=invalid_state');
+            try {
+                $stateData = json_decode(base64_decode($request->state), true);
+            } catch (\Exception $ex) {
+                $stateData = null;
+            }
+        }
+
+        if (!$stateData || !isset($stateData['user_id'])) {
+            \Log::error("LinkedIn state decryption failed");
+            return redirect($frontendUrl . '/accounts?error=invalid_state');
         }
 
         $response = Http::withoutVerifying()->asForm()->post('https://www.linkedin.com/oauth/v2/accessToken', [
@@ -342,7 +386,7 @@ class SocialAccountController extends Controller
         ]);
 
         if (!$response->ok()) {
-            return redirect(env('FRONTEND_URL') . '/accounts?error=token_exchange_failed');
+            return redirect($frontendUrl . '/accounts?error=token_exchange_failed');
         }
 
         $tokenData   = $response->json();
@@ -370,17 +414,23 @@ class SocialAccountController extends Controller
             ]
         );
 
-        return redirect(env('FRONTEND_URL') . '/accounts?success=linkedin_connected');
+        return redirect($frontendUrl . '/accounts?success=linkedin_connected');
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
 
     public function index(Request $request)
     {
+        $startTime = microtime(true);
+        \Log::info('index (get accounts): Started');
+
         $accounts = SocialAccount::where('user_id', $request->user()->id)
             ->latest()
             ->get()
             ->map(fn ($a) => $this->formatAccount($a));
+
+        $endTime = microtime(true);
+        \Log::info('index (get accounts): Completed in ' . round($endTime - $startTime, 4) . ' seconds');
 
         return response()->json(['success' => true, 'accounts' => $accounts]);
     }

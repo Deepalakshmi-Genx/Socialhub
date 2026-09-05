@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DashboardLayout } from '../../components/Layout'
 import { Button, Avatar, Badge, Tabs } from '../../components/ui'
-import { MOCK_USERS_ADMIN } from '../../store'
+import { useAdminStore } from '../../store'
 import { toast } from 'react-hot-toast'
 
 const SYSTEM_LOGS = [
@@ -60,20 +60,24 @@ function UserRow({ user, onToggle }) {
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('users')
-  const [users, setUsers] = useState(MOCK_USERS_ADMIN)
+  const { users, fetchUsers, fetched } = useAdminStore()
+  
+  useEffect(() => {
+    if (!fetched) fetchUsers()
+  }, [fetched])
 
   const toggleUser = (user) => {
-    setUsers(us => us.map(u => u.id === user.id ? { ...u, status: u.status === 'active' ? 'inactive' : 'active' } : u))
-    toast.success(`${user.name} ${user.status === 'active' ? 'deactivated' : 'activated'}.`)
+    // Optimistic UI or call API (mocked for now, assuming AdminController implements toggle)
+    toast.success(`${user.name} action triggered (API call pending).`)
   }
 
   const systemStats = [
-    { label: 'Total Users', value: users.length, icon: '👥', color: '#7c5cfc' },
-    { label: 'Active Users', value: users.filter(u => u.status === 'active').length, icon: '✅', color: '#10b981' },
-    { label: 'API Errors (24h)', value: API_ERRORS.length, icon: '⚠️', color: '#f59e0b' },
-    { label: 'Posts Today', value: 18, icon: '📝', color: '#3b82f6' },
-    { label: 'Campaigns Active', value: 2, icon: '📢', color: '#ec4899' },
-    { label: 'Scheduled Posts', value: 7, icon: '📅', color: '#6366f1' },
+    { label: 'Total Users', value: users.length, color: '#7c5cfc' },
+    { label: 'Active Users', value: users.filter(u => u.status === 'active').length, color: '#10b981' },
+    { label: 'API Errors (24h)', value: API_ERRORS.length, color: '#f59e0b' },
+    { label: 'Posts Today', value: 18, color: '#3b82f6' },
+    { label: 'Campaigns Active', value: 2, color: '#ec4899' },
+    { label: 'Scheduled Posts', value: 7, color: '#6366f1' },
   ]
 
   return (
@@ -93,7 +97,6 @@ export default function AdminPanel() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {systemStats.map((s, i) => (
           <div key={i} className="stat-card" style={{ padding: '18px 22px' }}>
-            <div style={{ fontSize: 26, marginBottom: 8 }}>{s.icon}</div>
             <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>{s.value}</div>
             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500 }}>{s.label}</div>
           </div>
@@ -103,10 +106,10 @@ export default function AdminPanel() {
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 20 }}>
         {[
-          { value: 'users', label: '👥 User Management' },
-          { value: 'logs', label: '📋 System Logs' },
-          { value: 'api', label: '⚠️ API Errors' },
-          { value: 'settings', label: '⚙️ Settings' },
+          { value: 'users', label: 'User Management' },
+          { value: 'logs', label: 'System Logs' },
+          { value: 'api', label: 'API Errors' },
+          { value: 'settings', label: 'Settings' },
         ].map(t => (
           <button key={t.value} className={`tab-btn ${activeTab === t.value ? 'active' : ''}`} onClick={() => setActiveTab(t.value)}>
             {t.label}

@@ -35,14 +35,14 @@ function PlatformPreview({ platform, account, content, media }) {
         </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#1c1e21' }}>{account.account_name}</div>
-          <div style={{ fontSize: 12, color: '#65676b' }}>Just now · 🌐</div>
+          <div style={{ fontSize: 12, color: '#65676b' }}>Just now</div>
         </div>
         <div style={{ marginLeft: 'auto', color: '#65676b', fontSize: 20 }}>···</div>
       </div>
       {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#1c1e21', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{content}</div>}
       {media && <img src={media} alt="Post media" style={{ width: '100%', maxHeight: 280, objectFit: 'cover' }} />}
       <div style={{ padding: '8px 16px', borderTop: '1px solid #e4e6eb', display: 'flex', gap: 20 }}>
-        {['👍 Like', '💬 Comment', '🔁 Share'].map(a => (
+        {['Like', 'Comment', 'Share'].map(a => (
           <button key={a} style={{ background: 'none', border: 'none', color: '#65676b', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '6px 0' }}>{a}</button>
         ))}
       </div>
@@ -69,9 +69,10 @@ function PlatformPreview({ platform, account, content, media }) {
         </div>
       )}
       <div style={{ padding: '12px 16px' }}>
-        <div style={{ display: 'flex', gap: 14, marginBottom: 8 }}>
-          {['❤️', '💬', '📤'].map(icon => <span key={icon} style={{ fontSize: 22, cursor: 'pointer' }}>{icon}</span>)}
-          <span style={{ marginLeft: 'auto', fontSize: 22 }}>🔖</span>
+        <div style={{ display: 'flex', gap: 14, marginBottom: 8, fontSize: 13, fontWeight: 600, color: '#262626' }}>
+          <span>Like</span>
+          <span>Comment</span>
+          <span>Share</span>
         </div>
         <div style={{ fontSize: 14, color: '#262626', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
           <strong>{account.account_name}</strong>{' '}
@@ -96,7 +97,7 @@ function PlatformPreview({ platform, account, content, media }) {
       {content && <div style={{ padding: '0 16px 12px', fontSize: 14, color: '#000000de', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{content}</div>}
       {media && <img src={media} alt="Post" style={{ width: '100%', maxHeight: 280, objectFit: 'cover' }} />}
       <div style={{ padding: '6px 16px', borderTop: '1px solid #e0e0e0', display: 'flex', gap: 16 }}>
-        {['👍 Like', '💬 Comment', '🔁 Repost', '📤 Send'].map(a => (
+        {['Like', 'Comment', 'Repost', 'Send'].map(a => (
           <button key={a} style={{ background: 'none', border: 'none', color: '#00000099', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '8px 0' }}>{a}</button>
         ))}
       </div>
@@ -267,7 +268,7 @@ export default function CreatePost() {
         if (hasFailed) {
           toast.error('One or more posts failed to publish. Check the posts list for details.');
         } else {
-          toast.success(form.publishNow ? `Post ${isEditing ? 'updated' : 'published'} successfully! 🎉` : `Post ${isEditing ? 'updated' : 'scheduled'}! 📅`);
+          toast.success(form.publishNow ? `Post ${isEditing ? 'updated' : 'published'} successfully!` : `Post ${isEditing ? 'updated' : 'scheduled'}!`);
         }
         
         fetchPosts() // refresh posts store
@@ -489,19 +490,118 @@ export default function CreatePost() {
               </div>
             </div>
 
-            {/* Schedule */}
-            <div className="card">
-              <div className="card-header">
-                <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Publishing Schedule</h3>
+          </div>
+
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: 'var(--text-primary)' }}>Content & Schedule</h3>
+              {form.accountIds.length > 1 && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${activeTab === 'global' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setActiveTab('global')}
+                  >
+                    All Platforms
+                  </button>
+                  {form.accountIds.map(id => {
+                    const acc = accounts.find(a => String(a.id) === id)
+                    if (!acc) return null
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`btn btn-xs ${activeTab === id ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setActiveTab(id)}
+                      >
+                        {acc.platform}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Post editor */}
+            <div className="form-group">
+              <label className="form-label">Message</label>
+              <textarea
+                className="form-input"
+                rows={5}
+                placeholder="Write your post content..."
+                value={currentContent}
+                onChange={e => updateField('content', e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="form-group">
+                <label className="form-label">Hashtags</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="#marketing #social"
+                  value={currentHashtags}
+                  onChange={e => updateField('hashtags', e.target.value)}
+                />
               </div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Link URL</label>
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="https://example.com"
+                  value={currentLink}
+                  onChange={e => updateField('link', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Media upload */}
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label className="form-label">Media Attachment</label>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={handleMediaChange}
+                style={{ display: 'none' }}
+                ref={fileInputRef}
+              />
+              {mediaPreview ? (
+                <div style={{ position: 'relative', width: 120, height: 120, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-primary)' }}>
+                  <img src={mediaPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <button
+                    type="button"
+                    onClick={() => { setMediaFile(null); setMediaPreview(null) }}
+                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload Image or Video
+                </button>
+              )}
+            </div>
+
+            {/* Publish options */}
+            <div style={{ borderTop: '1px solid var(--border-primary)', paddingTop: 20, marginTop: 20 }}>
+              <div className="form-group">
+                <label className="form-label">Publishing Schedule</label>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
                   {[
-                    { label: 'Publish Now', value: true },
-                    { label: 'Schedule', value: false },
+                    { value: true, label: 'Publish Now' },
+                    { value: false, label: 'Schedule' },
                   ].map(opt => (
                     <button
                       key={String(opt.value)}
+                      type="button"
                       onClick={() => updateField('publishNow', opt.value)}
                       style={{
                         flex: 1, padding: '10px', borderRadius: 'var(--radius-lg)',
@@ -512,7 +612,7 @@ export default function CreatePost() {
                         transition: 'all var(--transition-fast)', fontFamily: 'inherit',
                       }}
                     >
-                      {opt.value ? '⚡ Publish Now' : '📅 Schedule'}
+                      {opt.value ? 'Publish Now' : 'Schedule'}
                     </button>
                   ))}
                 </div>
@@ -539,7 +639,7 @@ export default function CreatePost() {
                 Save as Draft
               </Button>
               <Button variant="primary" fullWidth loading={loading} onClick={handlePublish}>
-                {form.publishNow ? '🚀 Publish All' : '📅 Schedule All'}
+                {form.publishNow ? 'Publish All' : 'Schedule All'}
               </Button>
             </div>
             
@@ -581,7 +681,7 @@ export default function CreatePost() {
                     </div>
                     {!ov.publishNow && ov.scheduledAt && (
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        📅 Scheduled for {new Date(ov.scheduledAt).toLocaleString()}
+                        Scheduled for {new Date(ov.scheduledAt).toLocaleString()}
                       </div>
                     )}
                   </div>
