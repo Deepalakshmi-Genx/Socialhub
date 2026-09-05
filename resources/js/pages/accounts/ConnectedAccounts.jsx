@@ -582,7 +582,7 @@ export default function ConnectedAccounts() {
           </svg>
         </div>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>OAuth Integration Notice</div>
+      <div style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', color: 'var(--text-primary)' }}>OAuth Integration Notice</div>
           <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.6 }}>
             To enable real platform connections, configure your Facebook App ID, Instagram App ID, and LinkedIn Client ID in the backend <code style={{ background: 'var(--bg-tertiary)', padding: '1px 4px', borderRadius: 4 }}>.env</code> file. See the backend setup guide for OAuth configuration.
           </div>
@@ -590,18 +590,28 @@ export default function ConnectedAccounts() {
       </div>
 
       {/* Summary strip */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Connected', value: accounts.length, color: 'var(--color-brand-500)' },
-          { label: 'Active', value: accounts.filter(a => a.status === 'active').length, color: 'var(--color-success-500)' },
-          { label: 'Requires Reconnect', value: accounts.filter(a => a.status === 'expired').length, color: 'var(--color-warning-500)' },
+          { label: 'Total Connected', value: accounts.length, color: '#7c5cfc' },
+          { label: 'Active Accounts', value: accounts.filter(a => a.status === 'active').length, color: '#10b981' },
+          { label: 'Requires Reconnect', value: accounts.filter(a => a.status === 'expired').length, color: '#f59e0b' },
         ].map((s, i) => (
-          <div key={i} style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+          <div key={i} className="stat-card animate-slide-up" style={{
+            borderTop: `4.5px solid ${s.color}`,
+            borderLeft: '1px solid var(--border-primary)',
+            borderRight: '1px solid var(--border-primary)',
+            borderBottom: '1px solid var(--border-primary)',
+            borderRadius: '16px',
+            background: 'var(--bg-card)',
+            padding: '20px 22px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
             <div>
-              <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>{s.value}</div>
-              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', fontWeight: 500 }}>{s.label}</div>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{s.value}</div>
             </div>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 10px ${s.color}` }} />
           </div>
         ))}
       </div>

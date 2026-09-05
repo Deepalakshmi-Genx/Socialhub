@@ -94,11 +94,29 @@ export default function AdminPanel() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
-        {systemStats.map((s, i) => (
-          <div key={i} className="stat-card" style={{ padding: '18px 22px' }}>
-            <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>{s.value}</div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500 }}>{s.label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Total Users', value: users.length, color: '#7c5cfc' },
+          { label: 'Active Users', value: users.filter(u => u.status === 'active').length, color: '#10b981' },
+          { label: 'API Errors (24h)', value: API_ERRORS.length, color: '#ef4444' },
+          { label: 'System Logs', value: SYSTEM_LOGS.length, color: '#3b82f6' },
+        ].map((s, i) => (
+          <div key={i} className="stat-card animate-slide-up" style={{
+            borderTop: `4.5px solid ${s.color}`,
+            borderLeft: '1px solid var(--border-primary)',
+            borderRight: '1px solid var(--border-primary)',
+            borderBottom: '1px solid var(--border-primary)',
+            borderRadius: '16px',
+            background: 'var(--bg-card)',
+            padding: '16px 20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{s.value}</div>
+            </div>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
           </div>
         ))}
       </div>

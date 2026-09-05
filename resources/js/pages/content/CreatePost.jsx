@@ -343,10 +343,10 @@ export default function CreatePost() {
 
           {/* Customization Tabs */}
           {form.accountIds.length > 0 && !isEditing && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }}>
+            <div className="tabs" style={{ marginBottom: 16, maxWidth: '100%', overflowX: 'auto' }}>
               <button
+                className={`tab-btn ${activeTab === 'default' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('default'); setCharCount(form.content.length); }}
-                style={{ padding: '8px 16px', borderRadius: 'var(--radius-full)', border: 'none', background: activeTab === 'default' ? 'var(--color-brand-500)' : 'var(--bg-secondary)', color: activeTab === 'default' ? 'white' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', transition: '0.2s' }}
               >
                 Default Options
               </button>
@@ -356,10 +356,10 @@ export default function CreatePost() {
                 return (
                   <button
                     key={id}
+                    className={`tab-btn ${activeTab === id ? 'active' : ''}`}
                     onClick={() => { setActiveTab(id); setCharCount(overrides[id]?.content?.length || form.content.length); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 'var(--radius-full)', border: 'none', background: activeTab === id ? 'var(--color-brand-500)' : 'var(--bg-secondary)', color: activeTab === id ? 'white' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap', transition: '0.2s' }}
                   >
-                    <PlatformIcon platform={acc.platform} size={14} color={activeTab === id ? 'white' : undefined} />
+                    <PlatformIcon platform={acc.platform} size={14} />
                     {acc.account_name}
                   </button>
                 )

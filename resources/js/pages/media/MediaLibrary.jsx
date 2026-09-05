@@ -94,16 +94,29 @@ export default function MediaLibrary() {
       <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" style={{ display: 'none' }} onChange={handleUpload} />
 
       {/* Stats strip */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
         {[
-          { label: 'Total Files', value: media.length },
-          { label: 'Images', value: media.filter(m => m.type === 'image').length },
-          { label: 'Videos', value: media.filter(m => m.type === 'video').length },
-          { label: 'Storage Used', value: `${totalSize} MB` },
+          { label: 'Total Files', value: media.length, color: '#7c5cfc' },
+          { label: 'Images', value: media.filter(m => m.type === 'image').length, color: '#10b981' },
+          { label: 'Videos', value: media.filter(m => m.type === 'video').length, color: '#3b82f6' },
+          { label: 'Storage Used', value: `${totalSize} MB`, color: '#f59e0b' },
         ].map((s, i) => (
-          <div key={i} style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border-primary)', borderRadius: 'var(--radius-xl)', padding: '14px 18px' }}>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
-            <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--text-primary)', marginTop: 2, letterSpacing: '-0.04em' }}>{s.value}</div>
+          <div key={i} className="stat-card animate-slide-up" style={{
+            borderTop: `4.5px solid ${s.color}`,
+            borderLeft: '1px solid var(--border-primary)',
+            borderRight: '1px solid var(--border-primary)',
+            borderBottom: '1px solid var(--border-primary)',
+            borderRadius: '16px',
+            background: 'var(--bg-card)',
+            padding: '16px 20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{s.value}</div>
+            </div>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
           </div>
         ))}
       </div>

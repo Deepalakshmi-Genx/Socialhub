@@ -11,16 +11,36 @@ import {
 
 function StatCard({ icon, label, value, trend, trendUp, color }) {
   return (
-    <div className="stat-card animate-slide-up">
-      <div className="stat-card-icon" style={{ background: `${color}18`, color }}>
-        {icon}
+    <div 
+      className="stat-card animate-slide-up"
+      style={{
+        borderTop: `4.5px solid ${color}`,
+        borderLeft: '1px solid var(--border-primary)',
+        borderRight: '1px solid var(--border-primary)',
+        borderBottom: '1px solid var(--border-primary)',
+        borderRadius: '16px',
+        background: 'var(--bg-card)',
+        padding: '20px 22px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {label}
+        </div>
+        <div className="stat-card-icon" style={{ width: 34, height: 34, borderRadius: 10, background: `${color}18`, color, marginBottom: 0 }}>
+          {icon}
+        </div>
       </div>
-      <div className="stat-card-value">{value}</div>
-      <div className="stat-card-label">{label}</div>
+      <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+        {value}
+      </div>
       {trend && (
-        <div className={`stat-card-trend ${trendUp ? 'up' : 'down'}`}>
-          {trendUp ? '↑' : '↓'} {trend}
-          <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> vs last month</span>
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: 8, fontWeight: 500 }}>
+          <span style={{ color: trendUp ? 'var(--color-success-500)' : 'var(--color-error-500)', fontWeight: 700 }}>
+            {trendUp ? '↑' : '↓'} {trend}
+          </span>
+          <span> vs last month</span>
         </div>
       )}
     </div>
@@ -125,9 +145,6 @@ export default function Dashboard() {
           <h2 style={{ color: 'white', fontSize: 'var(--font-size-2xl)', fontWeight: 800, letterSpacing: '-0.03em' }}>
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {(user?.name || user?.email?.split('@')[0] || 'User').split(' ')[0]}
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 'var(--font-size-sm)', marginTop: 4 }}>
-            You have <strong>{posts.filter(p => p.status === 'scheduled').length}</strong> posts scheduled and <strong>{campaigns?.filter(c => c.status === 'active')?.length || 0}</strong> campaigns running today.
-          </p>
         </div>
         <div style={{ display: 'flex', gap: 12, position: 'relative', zIndex: 1 }}>
           <button onClick={() => navigate('/posts/create')} style={{ background: 'white', color: 'var(--color-brand-700)', border: 'none', borderRadius: 'var(--radius-lg)', padding: '10px 20px', fontWeight: 700, fontSize: 'var(--font-size-sm)', cursor: 'pointer', fontFamily: 'inherit' }}>
