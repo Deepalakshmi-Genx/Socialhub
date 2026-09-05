@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { useAuthStore, useThemeStore, useUIStore, useNotificationsStore } from '../store'
+import { 
+  useAuthStore, useThemeStore, useUIStore, useNotificationsStore,
+  usePostsStore, useSocialAccountsStore, useCampaignsStore, useAnalyticsStore, useMediaStore, useAdminStore
+} from '../store'
+import { toast } from 'react-hot-toast'
 import { Avatar, IconButton, Badge } from './ui'
 
 // ─── Icons (inline SVG) ───────────────────────────────────────────────────────
@@ -148,6 +152,32 @@ export function Topbar({ title, actions }) {
   const { notifications, fetchNotifications, fetched: notifsFetched } = useNotificationsStore()
   const unread = notifications?.filter(n => !n.is_read)?.length || 0
 
+  const [refreshing, setRefreshing] = useState(false)
+  const { fetchPosts } = usePostsStore()
+  const { fetchAccounts } = useSocialAccountsStore()
+  const { fetchCampaigns } = useCampaignsStore()
+  const { fetchAnalytics } = useAnalyticsStore()
+  const { fetchMedia } = useMediaStore()
+  const { fetchUsers } = useAdminStore()
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await Promise.all([
+        fetchPosts(),
+        fetchAccounts(),
+        fetchCampaigns(),
+        fetchAnalytics(),
+        fetchNotifications(),
+        fetchMedia(),
+        fetchUsers(),
+      ])
+    } catch (e) {
+    } finally {
+      setTimeout(() => setRefreshing(false), 600)
+    }
+  }
+
   useEffect(() => {
     if (!notifsFetched) fetchNotifications()
   }, [notifsFetched])
@@ -174,6 +204,33 @@ export function Topbar({ title, actions }) {
       <div className="topbar-right">
         {/* Action buttons passed from page */}
         {actions}
+
+        {/* Refresh button */}
+        <button
+          className="btn btn-secondary"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Refresh All Data"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              animation: refreshing ? 'spin 0.7s linear infinite' : 'none',
+            }}
+          >
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+          <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+        </button>
 
         {/* Theme toggle */}
         <button

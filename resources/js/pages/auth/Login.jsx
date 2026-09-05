@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import axios from 'axios'
 import { useAuthStore, formatUserName } from '../../store'
@@ -8,9 +8,21 @@ import { Button, PlatformIcon } from '../../components/ui'
 export default function Login() {
   const navigate = useNavigate()
   const { setUser } = useAuthStore()
+  const [searchParams] = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
+
+  useEffect(() => {
+    const err = searchParams.get('error')
+    if (err === 'session_expired') {
+      toast.error('Session expired. Please sign in again.')
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (err === 'oauth_failed' || err === 'oauth_denied') {
+      toast.error('SSO login failed or was cancelled.')
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
