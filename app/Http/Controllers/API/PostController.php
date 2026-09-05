@@ -109,14 +109,14 @@ class PostController extends Controller
                 'post_type'         => $request->post_type,
                 'media_path'        => $mediaPath,
                 'status'            => $postData['status'] === 'publish_now' ? 'queued' : ($postData['status'] ?? 'draft'),
-                'scheduled_at'      => $postData['status'] === 'scheduled' ? Carbon::parse($postData['scheduled_at']) : null,
+                'scheduled_at'      => $postData['status'] === 'scheduled' ? Carbon::parse($postData['scheduled_at'])->setTimezone(config('app.timezone')) : null,
             ]);
 
             if ($postData['status'] === 'publish_now') {
                 PublishPost::dispatchSync($post);
                 $post->refresh();
             } elseif ($postData['status'] === 'scheduled') {
-                PublishPost::dispatch($post)->delay(Carbon::parse($postData['scheduled_at']));
+                PublishPost::dispatch($post)->delay(Carbon::parse($postData['scheduled_at'])->setTimezone(config('app.timezone')));
             }
 
             AuditLog::create([
@@ -208,13 +208,13 @@ class PostController extends Controller
             'post_type'         => $request->post_type,
             'media_path'        => $mediaPath,
             'status'            => $request->status === 'publish_now' ? 'queued' : ($request->status ?? 'draft'),
-            'scheduled_at'      => $request->status === 'scheduled' ? Carbon::parse($request->scheduled_at) : null,
+            'scheduled_at'      => $request->status === 'scheduled' ? Carbon::parse($request->scheduled_at)->setTimezone(config('app.timezone')) : null,
         ]);
 
         if ($request->status === 'publish_now') {
             PublishPost::dispatchSync($post);
         } elseif ($request->status === 'scheduled') {
-            PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
+            PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at)->setTimezone(config('app.timezone')));
         }
 
         return response()->json(['success' => true, 'post' => $post->fresh()]);
@@ -290,10 +290,10 @@ class PostController extends Controller
 
         $post->update([
             'status'       => 'scheduled',
-            'scheduled_at' => Carbon::parse($request->scheduled_at),
+            'scheduled_at' => Carbon::parse($request->scheduled_at)->setTimezone(config('app.timezone')),
         ]);
 
-        PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at));
+        PublishPost::dispatch($post)->delay(Carbon::parse($request->scheduled_at)->setTimezone(config('app.timezone')));
 
         return response()->json(['success' => true, 'post' => $post->fresh()]);
     }
