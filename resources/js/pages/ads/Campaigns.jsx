@@ -150,14 +150,27 @@ export default function Campaigns() {
       {/* Summary strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total Campaigns', value: campaigns.length, color: 'var(--color-brand-500)' },
-          { label: 'Total Spend', value: `$${totalSpend.toFixed(0)}`, color: 'var(--color-success-500)' },
-          { label: 'Total Impressions', value: totalImpressions.toLocaleString(), color: 'var(--color-info-500)' },
-          { label: 'Total Clicks', value: totalClicks.toLocaleString(), color: 'var(--color-warning-500)' },
+          { label: 'Total Campaigns', value: campaigns.length, color: '#7c5cfc' },
+          { label: 'Total Spend', value: `$${totalSpend.toFixed(0)}`, color: '#10b981' },
+          { label: 'Total Impressions', value: totalImpressions.toLocaleString(), color: '#3b82f6' },
+          { label: 'Total Clicks', value: totalClicks.toLocaleString(), color: '#f59e0b' },
         ].map((s, i) => (
-          <div key={i} className="stat-card" style={{ paddingTop: 16, paddingBottom: 16 }}>
-            <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>{s.value}</div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500, marginTop: 2 }}>{s.label}</div>
+          <div key={i} className="stat-card animate-slide-up" style={{
+            borderTop: `4.5px solid ${s.color}`,
+            borderLeft: '1px solid var(--border-primary)',
+            borderRight: '1px solid var(--border-primary)',
+            borderBottom: '1px solid var(--border-primary)',
+            borderRadius: '16px',
+            background: 'var(--bg-card)',
+            padding: '16px 20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{s.value}</div>
+            </div>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
           </div>
         ))}
       </div>

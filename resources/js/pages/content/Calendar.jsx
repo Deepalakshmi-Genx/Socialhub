@@ -69,7 +69,35 @@ export default function Calendar() {
         </Button>
       }
     >
-      {/* Controls */}
+      {/* Summary strip matching Dashboard UI */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Calendar Month', value: `${MONTHS[month]} ${year}`, color: '#7c5cfc' },
+          { label: 'Scheduled Posts', value: posts.filter(p => p.status === 'scheduled').length, color: '#3b82f6' },
+          { label: 'Published Posts', value: posts.filter(p => p.status === 'published').length, color: '#10b981' },
+          { label: 'Drafts Queue', value: posts.filter(p => p.status === 'draft').length, color: '#f59e0b' },
+        ].map((s, i) => (
+          <div key={i} className="stat-card animate-slide-up" style={{
+            borderTop: `4.5px solid ${s.color}`,
+            borderLeft: '1px solid var(--border-primary)',
+            borderRight: '1px solid var(--border-primary)',
+            borderBottom: '1px solid var(--border-primary)',
+            borderRadius: '16px',
+            background: 'var(--bg-card)',
+            padding: '16px 20px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: s.color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>{s.value}</div>
+            </div>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 8px ${s.color}` }} />
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Controls */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

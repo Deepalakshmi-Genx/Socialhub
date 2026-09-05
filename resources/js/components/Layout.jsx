@@ -198,6 +198,11 @@ export function Topbar({ title, actions }) {
   return (
     <header className="topbar">
       <div className="topbar-left">
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', fontWeight: 500, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>SocialHub</span>
+          <span style={{ opacity: 0.5 }}>›</span>
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{title}</span>
+        </div>
         <h1 className="topbar-title">{title}</h1>
       </div>
 

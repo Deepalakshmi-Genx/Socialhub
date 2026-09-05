@@ -47,14 +47,15 @@
 
 /* Primary */
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-brand-500), var(--color-brand-700));
+  background: linear-gradient(135deg, #7c5cfc, #633ef4);
   color: white;
-  box-shadow: 0 2px 8px rgba(124,92,252,0.3);
+  box-shadow: 0 4px 14px rgba(124, 92, 252, 0.35);
+  font-weight: 600;
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-800));
-  box-shadow: 0 4px 16px rgba(124,92,252,0.4);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #6b3ef4, #5325e0);
+  box-shadow: 0 6px 20px rgba(124, 92, 252, 0.45);
+  transform: translateY(-1.5px);
 }
 
 /* Secondary */
@@ -432,13 +433,20 @@
 }
 
 .sidebar-nav-item.active {
-  background: var(--bg-active);
-  color: var(--color-brand-600);
-  font-weight: 600;
+  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-700));
+  color: #ffffff !important;
+  font-weight: 700;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(124, 92, 252, 0.3);
+}
+
+.sidebar-nav-item.active svg {
+  stroke: #ffffff !important;
 }
 
 [data-theme="dark"] .sidebar-nav-item.active {
-  color: var(--color-brand-400);
+  background: linear-gradient(90deg, rgba(124, 92, 252, 0.22) 0%, rgba(124, 92, 252, 0.06) 100%);
+  color: var(--color-brand-300);
 }
 
 .sidebar-nav-item .nav-icon {
@@ -714,29 +722,71 @@
 }
 
 /* ===================================================
+   Segmented Control / Tabs
+   =================================================== */
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-700));
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(124, 92, 252, 0.35);
+}
+
+/* ===================================================
    Post Status Pill
    =================================================== */
 .post-status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  gap: 6px;
+  padding: 4px 12px;
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.post-status.draft      { background: var(--bg-tertiary); color: var(--text-tertiary); }
-.post-status.scheduled  { background: var(--color-info-50); color: var(--color-info-600); }
-.post-status.publishing { background: var(--color-warning-50); color: var(--color-warning-600); }
-.post-status.published  { background: var(--color-success-50); color: var(--color-success-600); }
-.post-status.failed     { background: var(--color-error-50); color: var(--color-error-600); }
+.post-status.draft      { background: var(--bg-tertiary); color: var(--text-tertiary); border: 1px solid var(--border-primary); }
+.post-status.scheduled  { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.post-status.publishing { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.post-status.published  { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.post-status.failed     { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .post-status.cancelled  { background: var(--bg-tertiary); color: var(--text-tertiary); }
 
-[data-theme="dark"] .post-status.scheduled  { background: rgba(59,130,246,0.15); color: var(--color-info-500); }
-[data-theme="dark"] .post-status.publishing { background: rgba(245,158,11,0.15); color: var(--color-warning-500); }
-[data-theme="dark"] .post-status.published  { background: rgba(16,185,129,0.15); color: var(--color-success-500); }
-[data-theme="dark"] .post-status.failed     { background: rgba(239,68,68,0.15);  color: var(--color-error-500); }
+[data-theme="dark"] .post-status.scheduled  { background: rgba(59,130,246,0.18); color: #60a5fa; border-color: rgba(59,130,246,0.3); }
+[data-theme="dark"] .post-status.publishing { background: rgba(245,158,11,0.18); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+[data-theme="dark"] .post-status.published  { background: rgba(16,185,129,0.18); color: #34d399; border-color: rgba(16,185,129,0.3); }
+[data-theme="dark"] .post-status.failed     { background: rgba(239,68,68,0.18);  color: #f87171; border-color: rgba(239,68,68,0.3); }
 
 /* ===================================================
    Platform Preview Card

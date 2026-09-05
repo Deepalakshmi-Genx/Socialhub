@@ -21,19 +21,37 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-function MetricCard({ label, value, sub, trend, icon, color }) {
+function MetricCard({ label, value, sub, trend, icon, color = '#7c5cfc' }) {
   return (
-    <div className="stat-card" style={{ padding: '20px 22px' }}>
+    <div 
+      className="stat-card animate-slide-up"
+      style={{
+        borderTop: `4.5px solid ${color}`,
+        borderLeft: '1px solid var(--border-primary)',
+        borderRight: '1px solid var(--border-primary)',
+        borderBottom: '1px solid var(--border-primary)',
+        borderRadius: '16px',
+        background: 'var(--bg-card)',
+        padding: '20px 22px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {label}
+        </div>
+        {icon && <div style={{ fontSize: 18, color: color }}>{icon}</div>}
       </div>
-      <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1 }}>{value !== undefined ? value : '-'}</div>
-      {sub && <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)', marginTop: 4 }}>{sub}</div>}
+      <div style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+        {value !== undefined ? value : '-'}
+      </div>
+      {sub && <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>{sub}</div>}
       {trend && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10, fontSize: 'var(--font-size-xs)', fontWeight: 700, color: trend.up ? 'var(--color-success-500)' : 'var(--color-error-500)' }}>
-          {trend.up ? '↑' : '↓'} {trend.value}
-          <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> vs last period</span>
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: 8, fontWeight: 500 }}>
+          <span style={{ color: trend.up ? 'var(--color-success-500)' : 'var(--color-error-500)', fontWeight: 700 }}>
+            {trend.up ? '↑' : '↓'} {trend.value}
+          </span>
+          <span> vs last period</span>
         </div>
       )}
     </div>
@@ -96,14 +114,14 @@ export default function AnalyticsOverview() {
         <>
           {/* Metrics */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-            <MetricCard label="Posts Published" value={organic.total_posts} trend={{ up: true, value: '12%' }} />
-            <MetricCard label="Total Reach" value={organic.total_reach?.toLocaleString()} trend={{ up: true, value: '18%' }} />
-            <MetricCard label="Total Impressions" value={organic.total_impressions?.toLocaleString()} trend={{ up: true, value: '24%' }} />
-            <MetricCard label="Engagement Rate" value={organic.engagement_rate !== undefined ? `${organic.engagement_rate}%` : undefined} trend={{ up: true, value: '0.5%' }} />
-            <MetricCard label="Total Likes" value={organic.total_likes?.toLocaleString()} />
-            <MetricCard label="Total Comments" value={organic.total_comments?.toLocaleString()} />
-            <MetricCard label="Total Shares" value={organic.total_shares?.toLocaleString()} />
-            <MetricCard label="Followers Growth" value={organic.followers_growth !== undefined ? `+${organic.followers_growth}%` : undefined} trend={{ up: true, value: '2.1%' }} />
+            <MetricCard label="Posts Published" value={organic.total_posts} trend={{ up: true, value: '12%' }} color="#7c5cfc" />
+            <MetricCard label="Total Reach" value={organic.total_reach?.toLocaleString()} trend={{ up: true, value: '18%' }} color="#3b82f6" />
+            <MetricCard label="Total Impressions" value={organic.total_impressions?.toLocaleString()} trend={{ up: true, value: '24%' }} color="#10b981" />
+            <MetricCard label="Engagement Rate" value={organic.engagement_rate !== undefined ? `${organic.engagement_rate}%` : undefined} trend={{ up: true, value: '0.5%' }} color="#f59e0b" />
+            <MetricCard label="Total Likes" value={organic.total_likes?.toLocaleString()} color="#ec4899" />
+            <MetricCard label="Total Comments" value={organic.total_comments?.toLocaleString()} color="#06b6d4" />
+            <MetricCard label="Total Shares" value={organic.total_shares?.toLocaleString()} color="#8b5cf6" />
+            <MetricCard label="Followers Growth" value={organic.followers_growth !== undefined ? `+${organic.followers_growth}%` : undefined} trend={{ up: true, value: '2.1%' }} color="#10b981" />
           </div>
 
           {/* Charts row */}
@@ -192,14 +210,14 @@ export default function AnalyticsOverview() {
       {tab === 'advertising' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-            <MetricCard label="Total Spend" value={advertising.total_spend !== undefined ? `$${advertising.total_spend.toFixed(0)}` : undefined} trend={{ up: false, value: '8%' }} />
-            <MetricCard label="Impressions" value={advertising.total_impressions?.toLocaleString()} trend={{ up: true, value: '31%' }} />
-            <MetricCard label="Total Clicks" value={advertising.total_clicks?.toLocaleString()} trend={{ up: true, value: '15%' }} />
-            <MetricCard label="Avg CTR" value={advertising.avg_ctr !== undefined ? `${advertising.avg_ctr}%` : undefined} trend={{ up: true, value: '0.3%' }} />
-            <MetricCard label="Avg CPC" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} sub="Cost per click" />
-            <MetricCard label="Conversions" value={advertising.conversions} trend={{ up: true, value: '22%' }} />
-            <MetricCard label="Cost/Conversion" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} trend={{ up: false, value: '5%' }} />
-            <MetricCard label="Active Campaigns" value={4} />
+            <MetricCard label="Total Spend" value={advertising.total_spend !== undefined ? `$${advertising.total_spend.toFixed(0)}` : undefined} trend={{ up: false, value: '8%' }} color="#7c5cfc" />
+            <MetricCard label="Impressions" value={advertising.total_impressions?.toLocaleString()} trend={{ up: true, value: '31%' }} color="#10b981" />
+            <MetricCard label="Total Clicks" value={advertising.total_clicks?.toLocaleString()} trend={{ up: true, value: '15%' }} color="#3b82f6" />
+            <MetricCard label="Avg CTR" value={advertising.avg_ctr !== undefined ? `${advertising.avg_ctr}%` : undefined} trend={{ up: true, value: '0.3%' }} color="#f59e0b" />
+            <MetricCard label="Avg CPC" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} sub="Cost per click" color="#ec4899" />
+            <MetricCard label="Conversions" value={advertising.conversions} trend={{ up: true, value: '22%' }} color="#06b6d4" />
+            <MetricCard label="Cost/Conversion" value={advertising.cpa !== undefined ? `$${advertising.cpa}` : undefined} trend={{ up: false, value: '5%' }} color="#8b5cf6" />
+            <MetricCard label="Active Campaigns" value={4} color="#10b981" />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
