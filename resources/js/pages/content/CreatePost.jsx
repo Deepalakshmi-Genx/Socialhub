@@ -226,7 +226,7 @@ export default function CreatePost() {
           status: form.publishNow ? 'publish_now' : 'scheduled',
           post_type: media ? (media.type.startsWith('video/') ? 'video' : 'image') : form.postType,
         };
-        if (form.scheduledAt) payload.scheduled_at = new Date(form.scheduledAt).toISOString();
+        if (form.scheduledAt) payload.scheduled_at = form.scheduledAt.replace('T', ' ') + ':00';
         if (mediaBase64) payload.media_base64 = mediaBase64;
 
         
@@ -242,7 +242,7 @@ export default function CreatePost() {
               hashtags: ov.hashtags,
               link: ov.link,
               status: ov.publishNow ? 'publish_now' : 'scheduled',
-              scheduled_at: ov.scheduledAt ? new Date(ov.scheduledAt).toISOString() : null
+              scheduled_at: ov.scheduledAt ? ov.scheduledAt.replace('T', ' ') + ':00' : null
             }
           })
         };
