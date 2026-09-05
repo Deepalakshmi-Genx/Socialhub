@@ -402,7 +402,7 @@ class SocialAccountController extends Controller
         $linkedinId = $profile ? ($profile['sub'] ?? Str::random(10)) : Str::random(10);
 
         SocialAccount::withTrashed()->updateOrCreate(
-            ['platform' => 'linkedin', 'platform_account_id' => $linkedinId, 'user_id' => $user->id],
+            ['platform' => 'linkedin', 'platform_account_id' => $linkedinId, 'user_id' => $stateData['user_id']],
             [
                 'account_name'  => $name,
                 'platform_type' => 'personal',
@@ -499,3 +499,4 @@ class SocialAccountController extends Controller
         ];
     }
 }
+ 
