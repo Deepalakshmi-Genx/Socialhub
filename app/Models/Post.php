@@ -39,6 +39,11 @@ class Post extends Model
         'published_at' => 'datetime',
     ];
 
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i');
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
